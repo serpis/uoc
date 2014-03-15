@@ -24,7 +24,8 @@ static ml_item_data_entry *item_datas = NULL;
 
 static ml_index *anim_idx    = NULL;
 static ml_index *art_idx     = NULL;
-static ml_index *statics_blocks_idx = NULL;
+static ml_index *statics0_blocks_idx = NULL;
+static ml_index *statics1_blocks_idx = NULL;
 static bool ml_inited = false;
 
 static bool mlt_inited = false;
@@ -421,8 +422,18 @@ static void parse_land_block(const char *p, const char *end, ml_land_block **mb)
 
 static void land_block(int map, int offset, int length, ml_land_block **mb)
 {
+    assert(map == 0 || map == 1);
+
     const char *end;
-    const char *p = map_file("files/map0.mul", &end);
+    const char *p;
+
+    if (map == 0)
+    {
+        p = map_file("files/map0.mul", &end);
+    } else if (map == 1)
+    {
+        p = map_file("files/map1.mul", &end);
+    }
 
     assert(offset >= 0);
     assert(length >= 0);
@@ -463,8 +474,18 @@ static void parse_statics_block(const char *p, const char *end, ml_statics_block
 
 static void statics_block(int map, int offset, int length, ml_statics_block **sb)
 {
+    assert(map == 0 || map == 1);
+
     const char *end;
-    const char *p = map_file("files/statics0.mul", &end);
+    const char *p;
+
+    if (map == 0)
+    {
+        p = map_file("files/statics0.mul", &end);
+    } else if (map == 1)
+    {
+        p = map_file("files/statics1.mul", &end);
+    }
 
     assert(offset >= 0);
     assert(length >= 0);
@@ -713,10 +734,12 @@ void ml_init()
 
     index("files/anim.idx"   , &anim_idx);
     index("files/artidx.mul" , &art_idx);
-    index("files/staidx0.mul", &statics_blocks_idx);
+    index("files/staidx0.mul", &statics0_blocks_idx);
+    index("files/staidx1.mul", &statics1_blocks_idx);
     assert(anim_idx           != NULL);
     assert(art_idx            != NULL);
-    assert(statics_blocks_idx != NULL);
+    assert(statics0_blocks_idx != NULL);
+    assert(statics1_blocks_idx != NULL);
 
     //printf("anim entries:           %d\n", anim_idx->entry_count);
     //printf("art entries:            %d\n", art_idx->entry_count);
@@ -823,11 +846,12 @@ ml_art *ml_read_static_art(int item_id)
 ml_land_block *ml_read_land_block(int map, int block_x, int block_y)
 {
     assert(ml_inited);
-    assert(map == 0);
+    assert(map == 1);
+    assert(map == 0 || map == 1);
 
     // size in number of blocks
-    int map_block_width = 896;
-    int map_block_height = 512;
+    int map_block_width = 768;//896;
+    int map_block_height = 512;//512;
 
     assert(block_x >= 0 && block_x < map_block_width);
     assert(block_y >= 0 && block_y < map_block_height);
@@ -852,21 +876,34 @@ static ml_statics_block *create_empty_statics_block()
 ml_statics_block *ml_read_statics_block(int map, int block_x, int block_y)
 {
     assert(ml_inited);
-    assert(map == 0);
+    assert(map == 1);
+    assert(map == 0 || map == 1);
 
     // size in number of blocks
-    int map_block_width = 896;
-    int map_block_height = 512;
+    int map_block_width = 768;//896;
+    int map_block_height = 512;//512;
 
     assert(block_x >= 0 && block_x < map_block_width);
     assert(block_y >= 0 && block_y < map_block_height);
 
     int block_num = block_x * map_block_height + block_y;
 
-    assert(block_num >= 0 && block_num < statics_blocks_idx->entry_count);
+    assert(map != 0 || (block_num >= 0 && block_num < statics0_blocks_idx->entry_count));
+    assert(map != 1 || (block_num >= 0 && block_num < statics1_blocks_idx->entry_count));
 
-    int offset = statics_blocks_idx->entries[block_num].offset;
-    int length = statics_blocks_idx->entries[block_num].length;
+    int offset = -1;
+    int length = -1;
+
+    if (map == 0)
+    {
+        offset = statics0_blocks_idx->entries[block_num].offset;
+        length = statics0_blocks_idx->entries[block_num].length;
+    }
+    else if (map == 1)
+    {
+        offset = statics1_blocks_idx->entries[block_num].offset;
+        length = statics1_blocks_idx->entries[block_num].length;
+    }
 
     if (offset == -1)
     {
