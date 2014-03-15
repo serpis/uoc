@@ -1029,9 +1029,11 @@ void net_init()
     packet_lengths[0x3a] = 0; // skills
     packet_lengths[0x4e] = 6; // set personal light level
     packet_lengths[0x4f] = 2; // set overall light level
+    packet_lengths[0x54] = 12; // play sound
     packet_lengths[0x55] = 1; // login complete
     packet_lengths[0x5b] = 4; // server time
     packet_lengths[0x65] = 4; // weather change
+    packet_lengths[0x6d] = 3; // play music
     packet_lengths[0x6e] = 14; // character animation
     packet_lengths[0x72] = 5; // set war mode
     packet_lengths[0x77] = 17; // add mobile (no equipment)
@@ -1048,8 +1050,10 @@ void net_init()
     packet_lengths[0xbd] = 0; // client version request
     packet_lengths[0xbc] = 3; // season
     packet_lengths[0xbf] = 0; // extended command
+    packet_lengths[0xc0] = 36; // hued effect
     packet_lengths[0xc1] = 0; // cliloc message
     packet_lengths[0xdc] = 9; // item revision
+    packet_lengths[0xdf] = 0; // "buff/debuff system" <- what is this?
     packet_lengths[0xf3] = 24; // add item (new version)
 
     assert(!inited);

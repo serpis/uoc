@@ -10,6 +10,7 @@
 #include "net.hpp"
 #include "mullib.hpp"
 #include "game.hpp"
+#include "file.hpp"
 
 #ifdef _LINUX
 
@@ -27,12 +28,93 @@
 
 #endif
 
+const int TYPE_LAND   = 0;
+const int TYPE_STATIC = 1;
+const int TYPE_ITEM   = 2;
+const int TYPE_MOBILE = 3;
+
+static struct
+{
+    int type;
+    union
+    {
+        struct 
+        {
+            int x, y;
+        } land;
+        struct 
+        {
+        } static_item;
+        struct 
+        {
+            item_t *item;
+        } item;
+        struct 
+        {
+            mobile_t *mobile;
+        } mobile;
+    };
+} pick_slots[0x10000];
+static bool picking_enabled = false;
+static int next_pick_id = 0;
+
+int pick_land(int x, int y)
+{
+    if (!picking_enabled)
+    {
+        return -1;
+    }
+    assert(next_pick_id < sizeof(pick_slots)/sizeof(pick_slots[0]));
+    pick_slots[next_pick_id].type = TYPE_LAND;
+    pick_slots[next_pick_id].land.x = x;
+    pick_slots[next_pick_id].land.y = y;
+    return next_pick_id++;
+}
+
+int pick_static()
+{
+    if (!picking_enabled)
+    {
+        return -1;
+    }
+    assert(next_pick_id < sizeof(pick_slots)/sizeof(pick_slots[0]));
+    pick_slots[next_pick_id].type = TYPE_STATIC;
+    return next_pick_id++;
+}
+
+int pick_item(item_t *item)
+{
+    if (!picking_enabled)
+    {
+        return -1;
+    }
+    assert(next_pick_id < sizeof(pick_slots)/sizeof(pick_slots[0]));
+    pick_slots[next_pick_id].type = TYPE_ITEM;
+    pick_slots[next_pick_id].item.item = item;
+    return next_pick_id++;
+}
+
+int pick_mobile(mobile_t *mobile)
+{
+    if (!picking_enabled)
+    {
+        return -1;
+    }
+    assert(next_pick_id < sizeof(pick_slots)/sizeof(pick_slots[0]));
+    pick_slots[next_pick_id].type = TYPE_MOBILE;
+    pick_slots[next_pick_id].mobile.mobile = mobile;
+    return next_pick_id++;
+}
+
 long now;
 
 std::map<int, item_t *> items;
 std::map<int, mobile_t *> mobiles;
 
 int draw_ceiling = 128;
+bool draw_roofs = true;
+
+int prg_blit_copy;
 
 /* A simple function that prints a message, the error code returned by SDL,
  * and quits the application */
@@ -55,6 +137,97 @@ void checkSDLError(int line = -1)
 		SDL_ClearError();
 	}
 #endif
+}
+
+void checkGLError(int line = -1)
+{
+    GLenum err;
+    while ((err = glGetError()) != GL_NO_ERROR)
+    {
+        printf("GL Error: %d\n", err);
+		if (line != -1)
+			printf(" + line: %i\n", line);
+    }
+}
+
+int gfx_compile_shader(const char *name, int type, const char *src, const char *end)
+{
+    int shader = glCreateShader(type);
+    int length = end - src;
+    glShaderSource(shader, 1, &src, &length);
+    checkGLError(__LINE__);
+    glCompileShader(shader);
+
+    int compiled_ok;
+    glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled_ok);
+    if (!compiled_ok)
+    {
+        int log_length;
+        glGetShaderiv(shader, GL_INFO_LOG_LENGTH , &log_length);
+        if (log_length > 0)
+        {
+            char *log = (char *)malloc(log_length);
+            int hmz;
+            glGetShaderInfoLog(shader, log_length, &hmz, log);
+            printf("%d %d\n", hmz, log_length);
+            printf("Error compiling '%s':\n%s", name, log);
+            // TODO: more graceful?
+            exit(-1);
+            free(log);
+        }
+
+        return -1;
+    }
+    return shader;
+}
+
+int gfx_link_program(const char *name, int shader0, int shader1)
+{
+    int program = glCreateProgram();
+    glAttachShader(program, shader0);
+    glAttachShader(program, shader1);
+    glLinkProgram(program);
+
+    int linked_ok;
+    glGetProgramiv(program, GL_LINK_STATUS, &linked_ok);
+    if (!linked_ok)
+    {
+        int log_length;
+        glGetProgramiv(program, GL_INFO_LOG_LENGTH , &log_length);
+        if (log_length > 0)
+        {
+            char *log = (char *)malloc(log_length+1);
+            int hmz;
+            glGetProgramInfoLog(program, log_length, &hmz, log);
+            assert(hmz == log_length);
+            printf("Error linking '%s':\n%s\n", name, log);
+            // TODO: more graceful?
+            exit(-1);
+            free(log);
+        }
+
+        return -1;
+    }
+    return program;
+}
+
+int gfx_upload_program(const char *vert_filename, const char *frag_filename)
+{
+    const char *vert_src_end;
+    const char *vert_src = file_map(vert_filename, &vert_src_end);
+    const char *frag_src_end;
+    const char *frag_src = file_map(frag_filename, &frag_src_end);
+
+    int s0 = gfx_compile_shader(vert_filename, GL_VERTEX_SHADER, vert_src, vert_src_end);
+    int s1 = gfx_compile_shader(frag_filename, GL_FRAGMENT_SHADER, frag_src, frag_src_end);
+
+    file_unmap(vert_src, vert_src_end);
+    file_unmap(frag_src, frag_src_end);
+
+    char program_name[1024];
+    sprintf(program_name, "program <%s> <%s>", vert_filename, frag_filename);
+
+    return gfx_link_program(program_name, s0, s1);
 }
 
 void dump_tga(const char *filename, int width, int height, void *argb1555_data)
@@ -242,6 +415,7 @@ struct statics_block_entry_t
 struct statics_block_t
 {
     int statics_count;
+    int roof_heights[8*8];
     statics_block_entry_t *statics;
 };
 
@@ -449,6 +623,11 @@ void write_statics_block(int map, int block_x, int block_y, ml_statics_block *sb
     statics_block_cache.entries[cache_block_index].statics_block.statics_count = sb->statics_count;
     statics_block_cache.entries[cache_block_index].statics_block.statics = (statics_block_entry_t *)malloc(sb->statics_count * sizeof(statics_block_entry_t));
 
+    for (int i = 0; i < 8*8; i++)
+    {
+        statics_block_cache.entries[cache_block_index].statics_block.roof_heights[i] = sb->roof_heights[i];
+    }
+
     for (int i = 0; i < sb->statics_count; i++)
     {
         statics_block_cache.entries[cache_block_index].statics_block.statics[i].tile_id = sb->statics[i].tile_id;
@@ -505,10 +684,11 @@ statics_block_t *get_statics_block(int map, int block_x, int block_y)
 }
 
 
-void render(pixel_storage_i *ps, int xs[4], int ys[4], int draw_prio)
+void render(pixel_storage_i *ps, int xs[4], int ys[4], int draw_prio, int id)
 {
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
+    glLoadIdentity();
     glOrtho(0, 512, 512, 0, -1, 1);
 
     glBindTexture(GL_TEXTURE_2D, ps->tex);
@@ -519,6 +699,19 @@ void render(pixel_storage_i *ps, int xs[4], int ys[4], int draw_prio)
     glDepthFunc(GL_LEQUAL);
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_ALPHA_TEST);
+
+    bool use_shader = id != -1;
+    if (use_shader)
+    {
+        int id0 = (id >> 16) & 0xff;
+        int id1 = (id >>  8) & 0xff;
+        int id2 = (id >>  0) & 0xff;
+        float id_vec[3] = { id0 / 255.0f, id1 / 255.0f, id2 / 255.0f };
+        glUseProgram(prg_blit_copy);
+        glUniform1i(glGetUniformLocation(prg_blit_copy, "tex"), 0);
+        glUniform3fv(glGetUniformLocation(prg_blit_copy, "id"), 1, id_vec);
+    }
+
     glBegin(GL_QUADS);
     for (int i = 0; i < 4; i++)
     {
@@ -526,38 +719,37 @@ void render(pixel_storage_i *ps, int xs[4], int ys[4], int draw_prio)
         glVertex3f(xs[i], ys[i], draw_prio / 5000000.0f);
     }
     glEnd();
+
+    if (use_shader)
+    {
+        glUseProgram(0);
+    }
+
     glDisable(GL_ALPHA_TEST);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_TEXTURE_2D);
 
     glBindTexture(GL_TEXTURE_2D, 0);
 
+
+
     glPopMatrix();
 }
 
-void blit_ps(pixel_storage_i *ps, int x, int y, int draw_prio)
+void blit_ps(pixel_storage_i *ps, int x, int y, int draw_prio, int id)
 {
     int xs[4] = { x, x + ps->width, x + ps->width, x };
     int ys[4] = { y, y, y + ps->height, y + ps->height };
 
-    render(ps, xs, ys, draw_prio);
+    render(ps, xs, ys, draw_prio, id);
 }
 
-void blit_ps_flipped(pixel_storage_i *ps, int x, int y, int draw_prio)
+void blit_ps_flipped(pixel_storage_i *ps, int x, int y, int draw_prio, int id)
 {
     int xs[4] = { x + ps->width, x, x, x + ps->width };
     int ys[4] = { y, y, y + ps->height, y + ps->height };
 
-    render(ps, xs, ys, draw_prio);
-}
-
-void blit(int x, int y, int draw_prio, int width, int height, void *data)
-{
-    pixel_storage_i ps = upload(width, height, data);
-
-    blit_ps(&ps, x, y, draw_prio);
-
-    glDeleteTextures(1, &ps.tex);
+    render(ps, xs, ys, draw_prio, id);
 }
 
 mobile_t player =
@@ -605,27 +797,6 @@ int world_draw_prio(int world_x, int world_y, int world_z)
     return prio;
 }
 
-/*void draw_world_land(ml_art *art, int x, int y, int z)
-{
-    int dxs[4] = { 0, 1, 1, 0 };
-    int dys[4] = { 0, 0, 1, 1 };
-
-    int xs[4];
-    int ys[4];
-
-    for (int i = 0; i < 4; i++)
-    {
-        int screen_x;
-        int screen_y;
-        world_to_screen(x + dxs[i], y + dys[i], z, &screen_x, &screen_y);
-
-        xs[i] = screen_x;
-        ys[i] = screen_y;
-    }
-
-    upload_and_render(xs, ys, 0, art->width, art->height, art->data);
-}*/
-
 int land_block_z_slow(int x, int y)
 {
     int block_x = x / 8;
@@ -645,7 +816,7 @@ int land_block_z_slow(int x, int y)
 }
 
 // this might be optimized when it comes to z calculations
-void draw_world_land_ps(pixel_storage_i *ps, int x, int y)
+void draw_world_land_ps(pixel_storage_i *ps, int x, int y, int id)
 {
     int dxs[4] = { 0, 1, 1, 0 };
     int dys[4] = { 0, 0, 1, 1 };
@@ -682,10 +853,10 @@ void draw_world_land_ps(pixel_storage_i *ps, int x, int y)
             min_z = zs[i];
         }
     }
-    render(ps, xs, ys, world_draw_prio(x, y, min_z));
+    render(ps, xs, ys, world_draw_prio(x, y, min_z), id);
 }
 
-void draw_world_art_ps(pixel_storage_i *ps, int x, int y, int z, int height)
+void draw_world_art_ps(pixel_storage_i *ps, int x, int y, int z, int height, int id)
 {
     if (z >= draw_ceiling)
     {
@@ -701,22 +872,10 @@ void draw_world_art_ps(pixel_storage_i *ps, int x, int y, int z, int height)
     screen_y -= ps->height;
     // statics tiles are shifted half a world unit downwards
     screen_y += 22;
-    blit_ps(ps, screen_x, screen_y, world_draw_prio(x, y, z+height));
+    blit_ps(ps, screen_x, screen_y, world_draw_prio(x, y, z+height), id);
 }
 
-void draw_world_art(ml_art *art, int x, int y, int z)
-{
-    int screen_x;
-    int screen_y;
-    world_to_screen(x, y, z, &screen_x, &screen_y);
-    // offset x by art's width/2
-    screen_x -= art->width / 2;
-    // offset y by art's height
-    screen_y -= art->height;
-    blit(screen_x, screen_y, world_draw_prio(x, y, z), art->width, art->height, art->data);
-}
-
-void draw_world_anim_frame(anim_frame_t *frame, bool flip, int x, int y, int z)
+void draw_world_anim_frame(anim_frame_t *frame, bool flip, int x, int y, int z, int id)
 {
     pixel_storage_i *ps = &frame->ps;
     int screen_x;
@@ -730,23 +889,23 @@ void draw_world_anim_frame(anim_frame_t *frame, bool flip, int x, int y, int z)
     {
         // offset by frame's center in x
         screen_x -= (frame->ps.width - frame->center_x - 1);
-        blit_ps_flipped(ps, screen_x, screen_y, world_draw_prio(x, y, z));
+        blit_ps_flipped(ps, screen_x, screen_y, world_draw_prio(x, y, z), id);
     }
     else
     {
         // offset by frame's center in x
         screen_x -= frame->center_x;
-        blit_ps(ps, screen_x, screen_y, world_draw_prio(x, y, z));
+        blit_ps(ps, screen_x, screen_y, world_draw_prio(x, y, z), id);
     }
 }
 
-void draw_world_land(int tile_id, int x, int y)
+void draw_world_land(int tile_id, int x, int y, int id)
 {
     pixel_storage_i *ps = get_land_ps(tile_id);
     // TODO: this null check shouldn't be necessary
     if (ps)
     {
-        draw_world_land_ps(ps, x, y);
+        draw_world_land_ps(ps, x, y, id);
     }
 }
 
@@ -763,23 +922,26 @@ void draw_world_land_block(int map, int block_x, int block_y)
             int tile_id = lb->tiles[dx + dy * 8].tile_id;
             //int z = lb->tiles[dx + dy * 8].z;
 
-            draw_world_land(tile_id, 8 * block_x + dx, 8 * block_y + dy);
+            int x = 8 * block_x + dx;
+            int y = 8 * block_y + dy;
+            int id = pick_land(x, y);
+            draw_world_land(tile_id, x, y, id);
         }
     }
 }
 
-void draw_world_static(int item_id, int x, int y, int z)
+void draw_world_item(int item_id, int x, int y, int z, int id)
 {
     pixel_storage_i *ps = get_static_ps(item_id);
     // TODO: this null check shouldn't be necessary
     if (ps)
     {
         int height = ml_get_item_data(item_id)->height;
-        draw_world_art_ps(ps, x,  y, z, height);
+        draw_world_art_ps(ps, x,  y, z, height, id);
     }
 }
 
-void draw_world_anim(int body_id, int action, int direction, int x, int y, int z)
+void draw_world_anim(int body_id, int action, int direction, int x, int y, int z, int id)
 {
     int frame_count;
     bool flip = false;
@@ -793,14 +955,14 @@ void draw_world_anim(int body_id, int action, int direction, int x, int y, int z
     // TODO: this null check shouldn't be necessary
     if (frames)
     {
-        draw_world_anim_frame(&frames[(now / 200) % frame_count], flip, x, y, z);
+        draw_world_anim_frame(&frames[(now / 200) % frame_count], flip, x, y, z, id);
     }
 }
 
 
-void draw_world_mobile(mobile_t *mobile)
+void draw_world_mobile(mobile_t *mobile, int id)
 {
-    draw_world_anim(mobile->body_id, 0, mobile->dir, mobile->x, mobile->y, mobile->z);
+    draw_world_anim(mobile->body_id, 0, mobile->dir, mobile->x, mobile->y, mobile->z, id);
     for (int i = 0; i < 32; i++)
     {
         int layer = i;
@@ -810,7 +972,8 @@ void draw_world_mobile(mobile_t *mobile)
             ml_item_data_entry *item_data = ml_get_item_data(item_id);
             if (item_data->animation != 0)
             {
-                draw_world_anim(item_data->animation, 0, mobile->dir, mobile->x, mobile->y, mobile->z);
+                //printf("drawing anim for item_id %d (%s)\n", item_id, item_data->name);
+                draw_world_anim(item_data->animation, 0, mobile->dir, mobile->x, mobile->y, mobile->z, id);
             }
         }
     }
@@ -830,16 +993,16 @@ void draw_world_statics_block(int map, int block_x, int block_y)
             int dy = sb->statics[i].dy;
             int z  = sb->statics[i].z;
 
-            draw_world_static(item_id, 8 * block_x + dx, 8 * block_y + dy, z);
+            // conditionally skip roofs
+            if (ml_get_item_data(item_id)->flags & 0x10000000 && !draw_roofs)
+            {
+                continue;
+            }
+
+            draw_world_item(item_id, 8 * block_x + dx, 8 * block_y + dy, z, pick_static());
         }
     }
 }
-
-/*void game_add_item(uint32_t id, int item_id, int x, int y, int z)
-{
-    item_t item = { id, item_id, x, y, z };
-    items.push_back(item);
-}*/
 
 void game_set_player_info(uint32_t id, int body_id, int x, int y, int z, int dir)
 {
@@ -864,7 +1027,6 @@ void game_set_player_pos(int x, int y, int z, int dir)
 void game_equip(mobile_t *m, int id, int item_id, int layer, int hue)
 {
     // TODO: track item..
-    // TODO: more general equip code
     assert(layer >= 0 && layer < 32);
     m->equipped_item_id[layer] = item_id;
 }
@@ -936,6 +1098,61 @@ void game_delete_object(uint32_t id)
     }
 }
 
+int find_lowest_connected_roof(bool visited[64*64], int map, int start_x, int start_y, int x, int y)
+{
+    //printf("(%d, %d)...", x, y);
+    {
+        int dx = x - start_x + 31;
+        int dy = y - start_y + 31;
+        // quick-exit condition
+        if (dx < 0 || dx >= 64 || dy < 0 || dy >= 64 || visited[dx + dy * 64])
+        {
+            //printf("quick_exit.\n");
+            return -1;
+        }
+
+        // mark this as visited
+        visited[dx + dy * 64] = true;
+    }
+
+    {
+        int block_x = x / 8;
+        int block_y = y / 8;
+
+        int dx = x % 8;
+        int dy = y % 8;
+
+        statics_block_t *sb = get_statics_block(map, block_x, block_y);
+        if (!sb)
+        {
+            //printf("no sb.\n");
+            return -1;
+        }
+
+        int h = sb->roof_heights[dx + dy * 8];
+        if (h == -1)
+        {
+            //printf("h = -1.\n");
+            return -1;
+        }
+        else
+        {
+            //printf("inspecting children\n");
+            int dxs[4] = { -1, 0, 1, 0 };
+            int dys[4] = { 0, -1, 0, 1 };
+            for (int i = 0; i < 4; i++)
+            {
+                int child_height = find_lowest_connected_roof(visited, map, start_x, start_y, x + dxs[i], y + dys[i]);
+                if (child_height != -1 && child_height < h)
+                {
+                    h = child_height;
+                }
+            }
+        }
+        return h;
+    }
+}
+
 // find ceiling at player's pos
 int find_ceiling(int map, int p_x, int p_y, int p_z)
 {
@@ -949,9 +1166,12 @@ int find_ceiling(int map, int p_x, int p_y, int p_z)
     int p_dy = p_y % 8;
 
     int ceiling = 128;
-    return ceiling;
+    //return ceiling;
+
+    bool is_roof = false;
 
     statics_block_t *sb = get_statics_block(map, block_x, block_y);
+
 
     if (sb)
     {
@@ -962,16 +1182,111 @@ int find_ceiling(int map, int p_x, int p_y, int p_z)
             int dy = sb->statics[i].dy;
             int z  = sb->statics[i].z;
 
+            ml_item_data_entry *item_data = ml_get_item_data(item_id);
+
             if (dx == p_dx && dy == p_dy && z > p_z && z < ceiling)
             {
                 ceiling = z;
+
+                if (item_data->flags & 0x10000000)
+                {
+                    //printf("is roof %d %d %d %d %d\n", item_data->weight, item_data->quality, item_data->quantity, item_data->animation, item_data->height);
+                    is_roof = true;
+                }
+                else
+                {
+                    is_roof = false;
+                }
             }
         }
     }
 
-    printf("ceiling: %d\n", ceiling);
+    if (is_roof)
+    {
+        // ceiling is a roof!
+        // do flood fill to find lowest connected roof, and use that as ceiling
+        bool visited[64*64];
+        memset(visited, 0, sizeof(visited));
+        ceiling = find_lowest_connected_roof(visited, map, p_x, p_y, p_x, p_y);
+    }
+
+    //printf("ceiling: %d\n", ceiling);
 
     return ceiling;
+}
+
+bool has_roof(int map, int p_x, int p_y)
+{
+    int block_x = p_x / 8;
+    int block_y = p_y / 8;
+
+    int p_dx = p_x % 8;
+    int p_dy = p_y % 8;
+
+    statics_block_t *sb = get_statics_block(map, block_x, block_y);
+    if (sb)
+    {
+        for (int i = 0; i < sb->statics_count; i++)
+        {
+            int item_id = sb->statics[i].tile_id;
+            int dx = sb->statics[i].dx;
+            int dy = sb->statics[i].dy;
+            int z  = sb->statics[i].z;
+
+            if (dx == p_dx && dy == p_dy && ml_get_item_data(item_id)->flags & 0x10000000)
+            {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
+void draw_world()
+{
+    int world_center_block_x = player.x / 8;
+    int world_center_block_y = player.y / 8;
+
+    // draw land blocks
+    for (int block_dy = -1; block_dy <= 1; block_dy++)
+    for (int block_dx = -1; block_dx <= 1; block_dx++)
+    {
+        int block_x = world_center_block_x + block_dx;
+        int block_y = world_center_block_y + block_dy;
+
+        draw_world_land_block(1, block_x, block_y);
+    }
+    // draw statics blocks
+    for (int block_dy = -1; block_dy <= 1; block_dy++)
+    for (int block_dx = -1; block_dx <= 1; block_dx++)
+    {
+        int block_x = world_center_block_x + block_dx;
+        int block_y = world_center_block_y + block_dy;
+
+        draw_world_statics_block(1, block_x, block_y);
+    }
+    // draw items
+    {
+        std::map<int, item_t *>::iterator it;
+        for (it = items.begin(); it != items.end(); ++it)
+        {
+            item_t *item = it->second;
+            draw_world_item(item->item_id, item->x, item->y, item->z, pick_item(item));
+        }
+    }
+    // draw mobiles
+    {
+        std::map<int, mobile_t *>::iterator it;
+        for (it = mobiles.begin(); it != mobiles.end(); ++it)
+        {
+            draw_world_mobile(it->second, pick_mobile(it->second));
+        }
+    }
+    // draw character
+    {
+        draw_world_mobile(&player, pick_mobile(&player));
+    }
 }
 
 int main()
@@ -1013,6 +1328,8 @@ int main()
     // Create our opengl context and attach it to our window
     main_context = SDL_GL_CreateContext(main_window);
     checkSDLError(__LINE__);
+
+    prg_blit_copy = gfx_upload_program("blit_copy.vert", "blit_copy.frag");
  
     // 0 = free running
     // 1 = vsync
@@ -1022,6 +1339,9 @@ int main()
     int move_dx;
     int move_dy;
     int move_dir;
+
+    int mouse_x;
+    int mouse_y;
  
     long start = SDL_GetTicks();
 
@@ -1098,26 +1418,16 @@ int main()
                 // 6 West
                 // 7 Northwest
 
-                // animations
-                // 0: south east
-                // 1: south
-                // 2: south west
-                // 3: west
-                // 4: north west
-                // 5: north
-                // 6: north east
-                // 7: east
-
-
-
-                //int dxs[8] = { 1, 0, -1, -1, -1, 0, 1, 1 };
-                //int dys[8] = { 1, 1, 1, 0, -1, -1, -1, 0 };
+                // animations have a different enumeration, need to remap on draw
 
                 int dxs[8] = { 0, 1, 1, 1, 0, -1, -1, -1 };
                 int dys[8] = { -1, -1, 0, 1, 1, 1, 0, -1 };
 
                 move_dx = dxs[dir];
                 move_dy = dys[dir];
+
+                mouse_x = x;
+                mouse_y = y;
             }
         }
 
@@ -1156,48 +1466,74 @@ int main()
         int world_center_block_x = player.x / 8;
         int world_center_block_y = player.y / 8;
 
+        // because GL counts y starting from bottom of screen
+        int inverted_mouse_y = 512-mouse_y-1;
+
         draw_ceiling = find_ceiling(1, player.x, player.y, player.z);
-
-        // draw land blocks
-        for (int block_dy = -1; block_dy <= 1; block_dy++)
-        for (int block_dx = -1; block_dx <= 1; block_dx++)
+        draw_roofs = true;
+        if (has_roof(1, player.x, player.y))
         {
-            int block_x = world_center_block_x + block_dx;
-            int block_y = world_center_block_y + block_dy;
-
-            draw_world_land_block(1, block_x, block_y);
+            draw_roofs = false;
         }
-        // draw statics blocks
-        for (int block_dy = -1; block_dy <= 1; block_dy++)
-        for (int block_dx = -1; block_dx <= 1; block_dx++)
-        {
-            int block_x = world_center_block_x + block_dx;
-            int block_y = world_center_block_y + block_dy;
 
-            draw_world_statics_block(1, block_x, block_y);
-        }
-        // draw items
+        // reset pick ids
+        next_pick_id = 0;
+        picking_enabled = true;
+        glScissor(mouse_x, inverted_mouse_y, 1, 1);
+        glEnable(GL_SCISSOR_TEST);
+        draw_world();
+        glDisable(GL_SCISSOR_TEST);
+        glScissor(0, 0, 512, 512);
+
+        // do picking
         {
-            std::map<int, item_t *>::iterator it;
-            for (it = items.begin(); it != items.end(); ++it)
+            uint8_t data[3];
+            glReadPixels(mouse_x, inverted_mouse_y, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, &data);
+            int id0 = data[0];
+            int id1 = data[1];
+            int id2 = data[2];
+            int id = (id0 << 16) | (id1 << 8) | id2;
+
+            if (id >= 0 && id < sizeof(pick_slots)/sizeof(pick_slots[0]))
             {
-                item_t *item = it->second;
-                draw_world_static(item->item_id, item->x, item->y, item->z);
+                //printf("picking id %d\n", id);
+                int type = pick_slots[id].type;
+                switch (type)
+                {
+                    case TYPE_LAND:
+                        //printf("land (%d, %d)\n", pick_slots[id].land.x, pick_slots[id].land.y);
+                        break;
+                    case TYPE_STATIC:
+                        //printf("static\n");
+                        break;
+                    case TYPE_ITEM:
+                        printf("item %x\n", pick_slots[id].item.item->id);
+                        break;
+                    case TYPE_MOBILE:
+                        printf("mobile %x\n", pick_slots[id].mobile.mobile->id);
+                        break;
+                    default:
+                        printf("unknown item picked :O\n");
+                        break;
+                }
             }
         }
-        // draw mobiles
-        {
-            std::map<int, mobile_t *>::iterator it;
-            for (it = mobiles.begin(); it != mobiles.end(); ++it)
-            {
-                //printf("drawing %p\n", it->second);
-                draw_world_mobile(it->second);
-            }
-        }
-        // draw character
-        {
-            draw_world_mobile(&player);
-        }
+        
+
+
+        // draw distinct background
+        glClearColor(1.0, 0.0, 1.0, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glColor4f(1.0f, 1.0f, 0.0f, 1.0f);
+        glBegin(GL_TRIANGLES);
+        glVertex2f(-1.0f, -1.0f);
+        glVertex2f( 1.0f, -1.0f);
+        glVertex2f( 0.0f,  1.0f);
+        glEnd();
+
+
+        picking_enabled = false;
+        draw_world();
 
         //
         SDL_GL_SwapWindow(main_window);

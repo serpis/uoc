@@ -1,1 +1,1 @@
-g++ -g -S0 main.cpp mullib.cpp net.cpp serialize.cpp -framework SDL2 -framework OpenGL
+g++ -g -S0 main.cpp file.cpp mullib.cpp net.cpp serialize.cpp -framework SDL2 -framework OpenGL

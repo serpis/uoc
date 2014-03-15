@@ -59,6 +59,7 @@ struct ml_land_block
 struct ml_statics_block
 {
     int statics_count;
+    int roof_heights[8*8];
     struct {
         int tile_id;
         int dx, dy, z;

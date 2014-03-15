@@ -1,8 +1,3 @@
-#include <fcntl.h>
-#include <unistd.h>
-#include <sys/mman.h>
-#include <errno.h>
-
 #include <cassert>
 #include <cstdio>
 #include <cstring>
@@ -10,11 +5,16 @@
 
 #include <stdint.h>
 
+#include <fcntl.h>
+#include <sys/mman.h>
+#include <errno.h>
 #include <pthread.h>
 #include <unistd.h>
 
+#include "file.hpp"
 #include "mullib.hpp"
 #include "serialize.hpp"
+
 
 
 // state of this module
@@ -31,42 +31,9 @@ static bool ml_inited = false;
 static bool mlt_inited = false;
 
 
-
 // first a bunch of low level functions...
 // at bottom of file are exposed easy-to-use functions
 
-static long filesize(const char *filename)
-{
-    FILE *f = fopen(filename, "rb");
-    assert(f != NULL);
-    fseek(f, 0, SEEK_SET);
-    long beg = ftell(f);
-    fseek(f, 0, SEEK_END);
-    long end = ftell(f);
-    fclose(f);
-    return end-beg;
-}
-
-static const char *map_file(const char *filename, const char **end)
-{
-    long size = filesize(filename);
-    int fd = open(filename, O_RDONLY);
-    assert(fd != -1);
-    const char *p = (const char *)mmap(NULL, size, PROT_READ, MAP_FILE|MAP_PRIVATE, fd, 0);
-    assert(p != MAP_FAILED);
-    assert(close(fd) == 0);
-
-    *end = p + size;
-
-    return p;
-}
-
-static void unmap_file(const char *p, const char *end)
-{
-    long size = end - p;
-
-    assert(munmap((void *)p, size) == 0);
-}
 
 static void parse_anim(const char *p, const char *end, ml_anim **animation)
 {
@@ -85,7 +52,7 @@ static void parse_anim(const char *p, const char *end, ml_anim **animation)
         palette[i] = read_uint16_le(&p, end);
         // set alpha
         if (palette[i]) { palette[i] |= 0x8000; }
-        //printf("%d %d\n", i, palette[i]);
+        //printf("palette %d %d\n", i, palette[i]);
     }
 
     const char *payload_start = p;
@@ -95,18 +62,21 @@ static void parse_anim(const char *p, const char *end, ml_anim **animation)
     for (int i = 0; i < frame_count; i++)
     {
         frame_start_offsets[i] = read_sint32_le(&p, end);
-        //printf("%d %d\n", i, frame_start_offsets[i]);
+        //printf("offset %d %d\n", i, frame_start_offsets[i]);
     }
 
     total_frames_size = 0;
     for (int i = 0; i < frame_count; i++)
     {
-        p = payload_start + frame_start_offsets[i] + 4;
+        if (frame_start_offsets[i] != 0)
+        {
+            p = payload_start + frame_start_offsets[i] + 4;
 
-        int width = read_sint16_le(&p, end);
-        int height = read_sint16_le(&p, end);
+            int width = read_sint16_le(&p, end);
+            int height = read_sint16_le(&p, end);
 
-        total_frames_size += 2 * width * height;
+            total_frames_size += 2 * width * height;
+        }
     }
 
     //printf("frames size: %d\n", total_frames_size);
@@ -123,13 +93,23 @@ static void parse_anim(const char *p, const char *end, ml_anim **animation)
     int offset_accum = 0;
     for (int i = 0; i < frame_count; i++)
     {
+        //printf("frame %d of %d\n", i, frame_count);
         p = payload_start + frame_start_offsets[i];
 
-        int center_x = read_sint16_le(&p, end);
-        int center_y = read_sint16_le(&p, end);
-        
-        int width = read_sint16_le(&p, end);
-        int height = read_sint16_le(&p, end);
+        int center_x = 0;
+        int center_y = 0;
+
+        int width = 0;
+        int height = 0;
+
+        if (frame_start_offsets[i] != 0)
+        {
+            center_x = read_sint16_le(&p, end);
+            center_y = read_sint16_le(&p, end);
+            
+            width = read_sint16_le(&p, end);
+            height = read_sint16_le(&p, end);
+        }
 
         anim->frames[i].center_x = center_x;
         anim->frames[i].center_y = center_y;
@@ -143,32 +123,39 @@ static void parse_anim(const char *p, const char *end, ml_anim **animation)
 
         //printf("%d %d %d %d\n", center_x, center_y, width, height);
 
-        while (true)
+        if (frame_start_offsets[i] != 0)
         {
-            uint32_t header = read_uint32_le(&p, end);
-            if (header == 0x7FFF7FFFul)
+            while (true)
             {
-                // finished...
-                break;
+                uint32_t header = read_uint32_le(&p, end);
+                //printf("header %08x\n", header);
+                if (header == 0x7FFF7FFFul)
+                {
+                    // finished...
+                    break;
+                }
+                int offset_x = ((header >> 22) ^ 0x200) - 0x200;
+                int offset_y = (((header >> 12) & 0x3ff) ^ 0x200) - 0x200;
+                int run = header & 0xfff;
+
+                int start_x = center_x + offset_x;
+                int start_y = center_y + height + offset_y;
+
+                uint16_t *w = (uint16_t *)&target_data[start_x + start_y * width];
+                uint16_t *wend = w + width * height;
+
+                //printf("%d %d\n", width, height);
+                //printf("%d %d %d\n", start_x, start_y, run);
+
+                for (int j = 0; j < run; j++)
+                {
+                    assert(w < wend);
+                    *w = palette[read_uint8(&p, end)];
+                    w += 1;
+                }
+
+                //printf("%d %d %d\n", start_x, start_y, run);
             }
-            int offset_x = ((header >> 22) ^ 0x200) - 0x200;
-            int offset_y = (((header >> 12) & 0x3ff) ^ 0x200) - 0x200;
-            int run = header & 0xfff;
-
-            int start_x = center_x + offset_x;
-            int start_y = center_y + height + offset_y;
-
-            uint16_t *w = (uint16_t *)&target_data[start_x + start_y * width];
-            uint16_t *wend = w + width * height;
-
-            for (int j = 0; j < run; j++)
-            {
-                assert(w < wend);
-                *w = palette[read_uint8(&p, end)];
-                w += 1;
-            }
-
-            //printf("%d %d %d\n", start_x, start_y, run);
         }
     }
 
@@ -182,16 +169,18 @@ static void parse_anim(const char *p, const char *end, ml_anim **animation)
 static void anim(int offset, int length, ml_anim **animation)
 {
     const char *end;
-    const char *p = map_file("files/anim.mul", &end);
+    const char *p = file_map("files/anim.mul", &end);
 
     assert(offset >= 0);
     assert(length >= 0);
     assert(p + offset + length <= end);
 
+    //printf("offset %d length %d\n", offset, length);
+
     // do stuff...
     parse_anim(p + offset, p + offset + length, animation);
 
-    unmap_file(p, end);
+    file_unmap(p, end);
 }
 
 static void parse_stat(const char *p, const char *end, ml_art **art)
@@ -252,7 +241,7 @@ static void parse_stat(const char *p, const char *end, ml_art **art)
 static void stat(int offset, int length, ml_art **art)
 {
     const char *end;
-    const char *p = map_file("files/art.mul", &end);
+    const char *p = file_map("files/art.mul", &end);
 
     assert(offset >= 0);
     assert(length >= 0);
@@ -261,7 +250,7 @@ static void stat(int offset, int length, ml_art **art)
     // do stuff...
     parse_stat(p + offset, p + offset + length, art);
 
-    unmap_file(p, end);
+    file_unmap(p, end);
 }
 
 static void parse_land(const char *p, const char *end, ml_art **art, bool rotate)
@@ -393,7 +382,7 @@ static void parse_land(const char *p, const char *end, ml_art **art, bool rotate
 static void land(int offset, int length, ml_art **art, bool rotate)
 {
     const char *end;
-    const char *p = map_file("files/art.mul", &end);
+    const char *p = file_map("files/art.mul", &end);
 
     assert(offset >= 0);
     assert(length >= 0);
@@ -402,7 +391,7 @@ static void land(int offset, int length, ml_art **art, bool rotate)
     // do stuff...
     parse_land(p + offset, p + offset + length, art, rotate);
 
-    unmap_file(p, end);
+    file_unmap(p, end);
 }
 
 static void parse_land_block(const char *p, const char *end, ml_land_block **mb)
@@ -429,10 +418,10 @@ static void land_block(int map, int offset, int length, ml_land_block **mb)
 
     if (map == 0)
     {
-        p = map_file("files/map0.mul", &end);
+        p = file_map("files/map0.mul", &end);
     } else if (map == 1)
     {
-        p = map_file("files/map1.mul", &end);
+        p = file_map("files/map1.mul", &end);
     }
 
     assert(offset >= 0);
@@ -441,7 +430,7 @@ static void land_block(int map, int offset, int length, ml_land_block **mb)
 
     parse_land_block(p + offset, p + offset + length, mb);
 
-    unmap_file(p, end);
+    file_unmap(p, end);
 }
 
 static void parse_statics_block(const char *p, const char *end, ml_statics_block **sb)
@@ -453,6 +442,11 @@ static void parse_statics_block(const char *p, const char *end, ml_statics_block
 
     *sb = (ml_statics_block *)malloc(statics_block_size);
     (*sb)->statics_count = statics_count;
+
+    for (int i = 0; i < 8*8; i++)
+    {
+        (*sb)->roof_heights[i] = -1;
+    }
 
     //printf("statics_count. %d\n", statics_count);
 
@@ -468,6 +462,14 @@ static void parse_statics_block(const char *p, const char *end, ml_statics_block
         (*sb)->statics[i].dy = dy;
         (*sb)->statics[i].z = z;
 
+        ml_item_data_entry *item_data = ml_get_item_data(tile_id);
+        if (item_data->flags & 0x10000000)
+        {
+            // is roof!
+            assert((*sb)->roof_heights[dx+dy*8] == -1);
+            (*sb)->roof_heights[dx+dy*8] = z;
+        }
+
         //printf("%d %d %d %d\n", tile_id, dx, dy, z);
     }
 }
@@ -481,10 +483,10 @@ static void statics_block(int map, int offset, int length, ml_statics_block **sb
 
     if (map == 0)
     {
-        p = map_file("files/statics0.mul", &end);
+        p = file_map("files/statics0.mul", &end);
     } else if (map == 1)
     {
-        p = map_file("files/statics1.mul", &end);
+        p = file_map("files/statics1.mul", &end);
     }
 
     assert(offset >= 0);
@@ -493,7 +495,7 @@ static void statics_block(int map, int offset, int length, ml_statics_block **sb
 
     parse_statics_block(p + offset, p + offset + length, sb);
 
-    unmap_file(p, end);
+    file_unmap(p, end);
 }
 
 /*static void parse_bodyconv(const char *p, const char *end)
@@ -573,11 +575,11 @@ static void statics_block(int map, int offset, int length, ml_statics_block **sb
 static void bodyconv()
 {
     const char *end;
-    const char *p = map_file("files/Bodyconv.def", &end);
+    const char *p = file_map("files/Bodyconv.def", &end);
 
     parse_bodyconv(p, end);
 
-    unmap_file(p, end);
+    file_unmap(p, end);
 }*/
 
 static void parse_index(const char *p, const char *end, ml_index **idx)
@@ -604,11 +606,11 @@ static void parse_index(const char *p, const char *end, ml_index **idx)
 static void index(const char *filename, ml_index **idx)
 {
     const char *end;
-    const char *p = map_file(filename, &end);
+    const char *p = file_map(filename, &end);
 
     parse_index(p, end, idx);
 
-    unmap_file(p, end);
+    file_unmap(p, end);
 }
 
 static void parse_tiledata(const char *p, const char *end)
@@ -666,11 +668,11 @@ static void parse_tiledata(const char *p, const char *end)
 static void read_tiledata()
 {
     const char *end;
-    const char *p = map_file("files/tiledata.mul", &end);
+    const char *p = file_map("files/tiledata.mul", &end);
 
     parse_tiledata(p, end);
 
-    unmap_file(p, end);
+    file_unmap(p, end);
 }
 
 
@@ -869,6 +871,10 @@ static ml_statics_block *create_empty_statics_block()
 {
     ml_statics_block *sb = (ml_statics_block *)malloc(sizeof(ml_statics_block));
     sb->statics_count = 0;
+    for (int i = 0; i < 8*8; i++)
+    {
+        sb->roof_heights[i] = -1;
+    }
     return sb;
 }
 
@@ -1088,8 +1094,10 @@ void mlt_read_anim(int body_id, int action, int direction, void (*callback)(int 
     req.anim.action    = action;
     req.anim.direction = direction;
     req.anim.callback  = callback;
+
+    callback(body_id, action, direction, ml_read_anim(body_id, action, direction));
     
-    async_requests.push(req);
+    //async_requests.push(req);
 }
 
 void mlt_read_land_art(int land_id, void (*callback)(int land_id, ml_art *l))
