@@ -29,8 +29,10 @@
 
 long now;
 
-std::list <item_t> item_list;
+std::map<int, item_t *> items;
 std::map<int, mobile_t *> mobiles;
+
+int draw_ceiling = 128;
 
 /* A simple function that prints a message, the error code returned by SDL,
  * and quits the application */
@@ -399,12 +401,14 @@ void write_land_block(int map, int block_x, int block_y, ml_land_block *lb)
 land_block_t *get_land_block(int map, int block_x, int block_y)
 {
     // TODO: remove these assumptions
-    assert(map == 0);
+    assert(map == 0 || map == 1);
     assert(block_x >= 0 && block_x < 896);
     assert(block_y >= 0 && block_y < 512);
 
     int cache_block_x = block_x % 8;
     int cache_block_y = block_y % 8;
+
+    // TODO: also care about map in the cache lookup
 
     int cache_block_index = cache_block_x + cache_block_y * 8;
 
@@ -438,6 +442,8 @@ void write_statics_block(int map, int block_x, int block_y, ml_statics_block *sb
     int cache_block_x = block_x % 8;
     int cache_block_y = block_y % 8;
 
+    // TODO: also care about map in the cache lookup
+
     int cache_block_index = cache_block_x + cache_block_y * 8;
 
     statics_block_cache.entries[cache_block_index].statics_block.statics_count = sb->statics_count;
@@ -458,7 +464,7 @@ void write_statics_block(int map, int block_x, int block_y, ml_statics_block *sb
 statics_block_t *get_statics_block(int map, int block_x, int block_y)
 {
     // TODO: remove these assumptions
-    assert(map == 0);
+    assert(map == 0 || map == 1);
     assert(block_x >= 0 && block_x < 896);
     assert(block_y >= 0 && block_y < 512);
 
@@ -626,7 +632,7 @@ int land_block_z_slow(int x, int y)
     int block_y = y / 8;
     int dx = x % 8;
     int dy = y % 8;
-    land_block_t *lb = get_land_block(0, block_x, block_y);
+    land_block_t *lb = get_land_block(1, block_x, block_y);
     if (lb)
     {
         int z = lb->tiles[dx + dy * 8].z;
@@ -681,6 +687,11 @@ void draw_world_land_ps(pixel_storage_i *ps, int x, int y)
 
 void draw_world_art_ps(pixel_storage_i *ps, int x, int y, int z, int height)
 {
+    if (z >= draw_ceiling)
+    {
+        return;
+    }
+
     int screen_x;
     int screen_y;
     world_to_screen(x, y, z, &screen_x, &screen_y);
@@ -824,11 +835,11 @@ void draw_world_statics_block(int map, int block_x, int block_y)
     }
 }
 
-void game_add_item(uint32_t id, int item_id, int x, int y, int z)
+/*void game_add_item(uint32_t id, int item_id, int x, int y, int z)
 {
     item_t item = { id, item_id, x, y, z };
-    item_list.push_back(item);
-}
+    items.push_back(item);
+}*/
 
 void game_set_player_info(uint32_t id, int body_id, int x, int y, int z, int dir)
 {
@@ -858,6 +869,23 @@ void game_equip(mobile_t *m, int id, int item_id, int layer, int hue)
     m->equipped_item_id[layer] = item_id;
 }
 
+item_t *game_get_item(uint32_t id)
+{
+    std::map<int, item_t *>::iterator it = items.find(id);
+    if (it != items.end())
+    {
+        return it->second;
+    }
+    else
+    {
+        item_t *i = (item_t *)malloc(sizeof(item_t));
+        memset(i, 0, sizeof(*i));
+        i->id = id;
+        items[id] = i;
+        return i;
+    }
+}
+
 mobile_t *game_get_mobile(uint32_t id)
 {
     if (player.id == id)
@@ -880,6 +908,70 @@ mobile_t *game_get_mobile(uint32_t id)
             return m;
         }
     }
+}
+
+void game_delete_object(uint32_t id)
+{
+    // delete mobile
+    {
+        std::map<int, mobile_t *>::iterator it = mobiles.find(id);
+        if (it != mobiles.end())
+        {
+            // TODO: delete all equipped items, gumps etc
+
+            free(it->second);
+            mobiles.erase(it);
+        }
+    }
+    // delete item
+    {
+        std::map<int, item_t *>::iterator it = items.find(id);
+        if (it != items.end())
+        {
+            // TODO: delete all contained items, gumps etc
+
+            free(it->second);
+            items.erase(it);
+        }
+    }
+}
+
+// find ceiling at player's pos
+int find_ceiling(int map, int p_x, int p_y, int p_z)
+{
+    // we need to look through statics and dynamic items.
+    // for now, just look at statics...
+
+    int block_x = p_x / 8;
+    int block_y = p_y / 8;
+
+    int p_dx = p_x % 8;
+    int p_dy = p_y % 8;
+
+    int ceiling = 128;
+    return ceiling;
+
+    statics_block_t *sb = get_statics_block(map, block_x, block_y);
+
+    if (sb)
+    {
+        for (int i = 0; i < sb->statics_count; i++)
+        {
+            int item_id = sb->statics[i].tile_id;
+            int dx = sb->statics[i].dx;
+            int dy = sb->statics[i].dy;
+            int z  = sb->statics[i].z;
+
+            if (dx == p_dx && dy == p_dy && z > p_z && z < ceiling)
+            {
+                ceiling = z;
+            }
+        }
+    }
+
+    printf("ceiling: %d\n", ceiling);
+
+    return ceiling;
 }
 
 int main()
@@ -1064,6 +1156,8 @@ int main()
         int world_center_block_x = player.x / 8;
         int world_center_block_y = player.y / 8;
 
+        draw_ceiling = find_ceiling(1, player.x, player.y, player.z);
+
         // draw land blocks
         for (int block_dy = -1; block_dy <= 1; block_dy++)
         for (int block_dx = -1; block_dx <= 1; block_dx++)
@@ -1071,7 +1165,7 @@ int main()
             int block_x = world_center_block_x + block_dx;
             int block_y = world_center_block_y + block_dy;
 
-            draw_world_land_block(0, block_x, block_y);
+            draw_world_land_block(1, block_x, block_y);
         }
         // draw statics blocks
         for (int block_dy = -1; block_dy <= 1; block_dy++)
@@ -1080,25 +1174,29 @@ int main()
             int block_x = world_center_block_x + block_dx;
             int block_y = world_center_block_y + block_dy;
 
-            draw_world_statics_block(0, block_x, block_y);
+            draw_world_statics_block(1, block_x, block_y);
         }
         // draw items
-        std::list<item_t>::iterator it;
-        for (it = item_list.begin(); it != item_list.end(); ++it)
         {
-            item_t item = *it;
-            draw_world_static(item.item_id, item.x, item.y, item.z);
+            std::map<int, item_t *>::iterator it;
+            for (it = items.begin(); it != items.end(); ++it)
+            {
+                item_t *item = it->second;
+                draw_world_static(item->item_id, item->x, item->y, item->z);
+            }
         }
-        // draw character
+        // draw mobiles
         {
-            draw_world_mobile(&player);
-
             std::map<int, mobile_t *>::iterator it;
             for (it = mobiles.begin(); it != mobiles.end(); ++it)
             {
                 //printf("drawing %p\n", it->second);
                 draw_world_mobile(it->second);
             }
+        }
+        // draw character
+        {
+            draw_world_mobile(&player);
         }
 
         //

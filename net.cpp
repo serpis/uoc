@@ -608,6 +608,13 @@ void net_poll()
                 break;
             }
 
+            /*printf("trying to handle packet:\n");
+            for (const char *pp = buf; pp < end; pp++)
+            {
+                printf("%02x ", (uint8_t)*pp);
+            }
+            printf("\n");*/
+
             //printf("packet id: %02x, length: %d\n", packet_id, packet_len);
 
             switch (packet_id)
@@ -647,7 +654,11 @@ void net_poll()
                     }
                     assert(p == end);
 
-                    game_add_item(id, item_id, x, y, z);
+                    item_t *item = game_get_item(id);
+                    item->item_id = item_id;
+                    item->x = x;
+                    item->y = y;
+                    item->z = z;
 
                     break;
                 }
@@ -663,12 +674,18 @@ void net_poll()
                     read_uint32_be(&p, end);
                     read_uint32_be(&p, end);
                     read_uint8(&p, end);
-                    int map_width = read_uint16_be(&p, end) + 8;
-                    int map_height = read_uint16_be(&p, end) + 8;
+                    int map_width = read_uint16_be(&p, end);
+                    int map_height = read_uint16_be(&p, end);
+                    printf("map width: %d height: %d\n", map_width, map_height);
                     read_uint32_be(&p, end);
                     read_uint16_be(&p, end);
                     game_set_player_info(id, body_id, x, y, z, dir);
 
+                    break;
+                }
+                case 0x1d: {
+                    uint32_t id = read_uint32_be(&p, end);
+                    game_delete_object(id);
                     break;
                 }
                 case 0x20: {
@@ -704,6 +721,19 @@ void net_poll()
                     uint8_t status = read_uint8(&p, end);
 
                     printf("move ack seq %d\n", seq);
+                    break;
+                }
+                case 0x2e: {
+                    uint32_t id = read_uint32_be(&p, end);
+                    int item_id = read_uint16_be(&p, end);
+                    read_uint8(&p, end);
+                    int layer = read_uint8(&p, end);
+                    uint32_t mob_id = read_uint32_be(&p, end);
+                    int hue = read_uint16_be(&p, end);
+
+                    mobile_t *m = game_get_mobile(mob_id);
+                    game_equip(m, id, item_id, layer, hue);
+
                     break;
                 }
                 case 0x77: {
@@ -911,7 +941,12 @@ void net_poll()
                     int cmd = read_uint16_be(&p, end);
                     switch (cmd)
                     {
-
+                        case 8: {
+                            // TODO: actually do something with this info
+                            int map = read_uint8(&p, end);
+                            printf("ignoring instruction to switch to map %d\n", map);
+                            break;
+                        }
                         default:
                             printf("ignoring 0xbf subcommand %02x\n", cmd);
                     }
@@ -934,7 +969,11 @@ void net_poll()
 
                     if (type == 0)
                     {
-                        game_add_item(id, item_id, x, y, z);
+                        item_t *item = game_get_item(id);
+                        item->item_id = item_id;
+                        item->x = x;
+                        item->y = y;
+                        item->z = z;
                     }
                     else
                     {
@@ -986,6 +1025,7 @@ void net_init()
     packet_lengths[0x20] = 19; // add mobile
     packet_lengths[0x21] = 8; // move reject
     packet_lengths[0x22] = 3; // move accept
+    packet_lengths[0x2e] = 15; // equip update
     packet_lengths[0x3a] = 0; // skills
     packet_lengths[0x4e] = 6; // set personal light level
     packet_lengths[0x4f] = 2; // set overall light level
