@@ -1095,9 +1095,7 @@ void mlt_read_anim(int body_id, int action, int direction, void (*callback)(int 
     req.anim.direction = direction;
     req.anim.callback  = callback;
 
-    callback(body_id, action, direction, ml_read_anim(body_id, action, direction));
-    
-    //async_requests.push(req);
+    async_requests.push(req);
 }
 
 void mlt_read_land_art(int land_id, void (*callback)(int land_id, ml_art *l))
