@@ -1496,6 +1496,7 @@ int main()
                                 break;
                             case TYPE_MOBILE:
                                 printf("mobile %x\n", pick_target->mobile.mobile->id);
+                                net_send_use(pick_target->mobile.mobile->id);
                                 break;
                             default:
                                 printf("unknown item picked :O\n");
