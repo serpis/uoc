@@ -1038,7 +1038,9 @@ void net_init()
 
     memset(packet_lengths, -1, sizeof(packet_lengths));
 
+    packet_lengths[0x0b] = 7; // damage
     packet_lengths[0x11] = 0; // status bar info
+    packet_lengths[0x17] = 12; // health bar update
     packet_lengths[0x1a] = 0; // add item
     packet_lengths[0x1b] = 37; // login confirm
     packet_lengths[0x1c] = 0; // text ascii
@@ -1046,8 +1048,11 @@ void net_init()
     packet_lengths[0x20] = 19; // add mobile
     packet_lengths[0x21] = 8; // move reject
     packet_lengths[0x22] = 3; // move accept
+    packet_lengths[0x25] = 21; // container update
+    packet_lengths[0x2c] = 2; // death status
     packet_lengths[0x2e] = 15; // equip update
     packet_lengths[0x3a] = 0; // skills
+    packet_lengths[0x3c] = 0; // container contents
     packet_lengths[0x4e] = 6; // set personal light level
     packet_lengths[0x4f] = 2; // set overall light level
     packet_lengths[0x54] = 12; // play sound
@@ -1060,13 +1065,16 @@ void net_init()
     packet_lengths[0x77] = 17; // add mobile (no equipment)
     packet_lengths[0x78] = 0; // add mobile
     packet_lengths[0x82] = 2; // login denied
+    packet_lengths[0x89] = 0; // corpse clothing
     packet_lengths[0x8c] = 11; // connect to game server
     packet_lengths[0xa1] = 9; // set health
     packet_lengths[0xa2] = 9; // set mana
     packet_lengths[0xa3] = 9; // set stamina
     packet_lengths[0xa8] = 0; // server list
     packet_lengths[0xa9] = 0; // character list
+    packet_lengths[0xaa] = 5; // set combatant
     packet_lengths[0xae] = 0; // unicode speech
+    packet_lengths[0xaf] = 13; // death animation
     packet_lengths[0xb9] = 3; // enable client features
     packet_lengths[0xbd] = 0; // client version request
     packet_lengths[0xbc] = 3; // season
