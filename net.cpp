@@ -146,14 +146,14 @@ void send_game_server_login(const char *username, const char *password, uint32_t
     send_packet(data, end);
 }
 
-void send_select_server(int id)
+void send_select_server(int server_id)
 {
     char data[3];
     memset(data, 0, sizeof(data));
     char *p = data;
     char *end = p + sizeof(data);
     write_uint8(&p, end, 0xa0);
-    write_uint16_be(&p, end, id);
+    write_uint16_be(&p, end, server_id);
     send_packet(data, end);
 }
 
@@ -631,12 +631,12 @@ void net_poll()
             switch (packet_id)
             {
                 case 0x1a: {
-                    uint32_t temp_id = read_uint32_be(&p, end);
-                    uint32_t id = temp_id & 0x7fffffff;
+                    uint32_t temp_serial = read_uint32_be(&p, end);
+                    uint32_t serial = temp_serial & 0x7fffffff;
                     int temp_item_id = read_uint16_be(&p, end);
                     int item_id = temp_item_id & 0x7fff;
                     int amount = 1;
-                    if (temp_id & 0x80000000ul)
+                    if (temp_serial & 0x80000000ul)
                     {
                         amount = read_uint16_be(&p, end);
                     }
@@ -665,7 +665,7 @@ void net_poll()
                     }
                     assert(p == end);
 
-                    item_t *item = game_get_item(id);
+                    item_t *item = game_get_item(serial);
                     item->item_id = item_id;
                     item->x = x;
                     item->y = y;
@@ -677,7 +677,7 @@ void net_poll()
                     break;
                 }
                 case 0x1b: {
-                    uint32_t id = read_uint32_be(&p, end);
+                    uint32_t serial = read_uint32_be(&p, end);
                     read_uint32_be(&p, end);
                     int body_id = read_uint16_be(&p, end);
                     int x = read_uint16_be(&p, end);
@@ -693,17 +693,17 @@ void net_poll()
                     printf("map width: %d height: %d\n", map_width, map_height);
                     read_uint32_be(&p, end);
                     read_uint16_be(&p, end);
-                    game_set_player_info(id, body_id, x, y, z, 0, dir);
+                    game_set_player_info(serial, body_id, x, y, z, 0, dir);
 
                     break;
                 }
                 case 0x1d: {
-                    uint32_t id = read_uint32_be(&p, end);
-                    game_delete_object(id);
+                    uint32_t serial = read_uint32_be(&p, end);
+                    game_delete_object(serial);
                     break;
                 }
                 case 0x20: {
-                    uint32_t id = read_uint32_be(&p, end);
+                    uint32_t serial = read_uint32_be(&p, end);
                     int body_id = read_uint16_be(&p, end);
                     read_uint8(&p, end);
                     int hue_id = read_uint16_be(&p, end);
@@ -714,7 +714,7 @@ void net_poll()
                     int dir = read_uint8(&p, end);
                     int z = read_sint8(&p, end);
                     //printf("0x20: hue_id = %04x\n", hue_id);
-                    game_set_player_info(id, body_id, x, y, z, hue_id, dir);
+                    game_set_player_info(serial, body_id, x, y, z, hue_id, dir);
                     break;
                 }
                 case 0x21: {
@@ -739,16 +739,16 @@ void net_poll()
                     break;
                 }
                 case 0x2e: {
-                    uint32_t id = read_uint32_be(&p, end);
+                    uint32_t serial = read_uint32_be(&p, end);
                     int item_id = read_uint16_be(&p, end);
                     read_uint8(&p, end);
                     int layer = read_uint8(&p, end);
-                    uint32_t mob_id = read_uint32_be(&p, end);
+                    uint32_t mob_serial = read_uint32_be(&p, end);
                     int hue_id = read_uint16_be(&p, end);
 
-                    mobile_t *m = game_get_mobile(mob_id);
+                    mobile_t *m = game_get_mobile(mob_serial);
                     //printf("0x2e: hue_id = %04x\n", hue_id);
-                    game_equip(m, id, item_id, layer, hue_id);
+                    game_equip(m, serial, item_id, layer, hue_id);
 
                     break;
                 }
@@ -768,8 +768,8 @@ void net_poll()
                     break;
                 }
                 case 0x78: {
-                    uint32_t mob_id = read_uint32_be(&p, end);
-                    mobile_t *m = game_get_mobile(mob_id);
+                    uint32_t mob_serial = read_uint32_be(&p, end);
+                    mobile_t *m = game_get_mobile(mob_serial);
 
                     m->body_id = read_uint16_be(&p, end);
                     m->x = read_uint16_be(&p, end);
@@ -782,8 +782,8 @@ void net_poll()
                     m->noto = read_uint8(&p, end);
                     while (true)
                     {
-                        uint32_t id = read_uint32_be(&p, end);
-                        if (id == 0)
+                        uint32_t serial = read_uint32_be(&p, end);
+                        if (serial == 0)
                         {
                             break;
                         }
@@ -797,7 +797,7 @@ void net_poll()
                         }
                         //printf("0x78: item.hue_id = %04x\n", m->hue_id);
                         //printf("mob %x, equip %x %d %d %d\n", mob_id, id, item_id, layer, hue_id);
-                        game_equip(m, id, item_id, layer, hue_id);
+                        game_equip(m, serial, item_id, layer, hue_id);
                     }
 
                     break;
@@ -974,7 +974,7 @@ void net_poll()
                 case 0xf3: {
                     read_uint16_be(&p, end); // unknown
                     int type = read_uint8(&p, end); // 0 = item, 1 = multi
-                    uint32_t id = read_uint32_be(&p, end);
+                    uint32_t serial = read_uint32_be(&p, end);
                     int item_id = read_uint16_be(&p, end);
                     int direction = read_uint8(&p, end);
                     int amount = read_uint16_be(&p, end);
@@ -989,7 +989,7 @@ void net_poll()
 
                     if (type == 0)
                     {
-                        item_t *item = game_get_item(id);
+                        item_t *item = game_get_item(serial);
                         item->item_id = item_id;
                         item->x = x;
                         item->y = y;

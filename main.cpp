@@ -846,7 +846,7 @@ void blit_ps_flipped(pixel_storage_i *ps, int x, int y, int draw_prio, int hue_i
 
 mobile_t player =
 {
-    12345, // id
+    12345, // serial
     401, // body_id
     1212, 1537, 0, // xyz
     0, // dir
@@ -1097,10 +1097,10 @@ void draw_world_statics_block(int map, int block_x, int block_y)
     }
 }
 
-void game_set_player_info(uint32_t id, int body_id, int x, int y, int z, int hue_id, int dir)
+void game_set_player_info(uint32_t serial, int body_id, int x, int y, int z, int hue_id, int dir)
 {
-    printf("player id: %x\n", id);
-    player.id = id;
+    printf("player serial: %x\n", serial);
+    player.serial = serial;
     player.body_id = body_id;
     player.x = x;
     player.y = y;
@@ -1118,7 +1118,7 @@ void game_set_player_pos(int x, int y, int z, int dir)
     player.dir = dir;
 }
 
-void game_equip(mobile_t *m, int id, int item_id, int layer, int hue_id)
+void game_equip(mobile_t *m, uint32_t serial, int item_id, int layer, int hue_id)
 {
     // TODO: track item..
     assert(layer >= 0 && layer < 32);
@@ -1126,9 +1126,9 @@ void game_equip(mobile_t *m, int id, int item_id, int layer, int hue_id)
     m->equipped_hue_id[layer] = hue_id;
 }
 
-item_t *game_get_item(uint32_t id)
+item_t *game_get_item(uint32_t serial)
 {
-    std::map<int, item_t *>::iterator it = items.find(id);
+    std::map<int, item_t *>::iterator it = items.find(serial);
     if (it != items.end())
     {
         return it->second;
@@ -1137,21 +1137,21 @@ item_t *game_get_item(uint32_t id)
     {
         item_t *i = (item_t *)malloc(sizeof(item_t));
         memset(i, 0, sizeof(*i));
-        i->id = id;
-        items[id] = i;
+        i->serial = serial;
+        items[serial] = i;
         return i;
     }
 }
 
-mobile_t *game_get_mobile(uint32_t id)
+mobile_t *game_get_mobile(uint32_t serial)
 {
-    if (player.id == id)
+    if (player.serial == serial)
     {
         return &player;
     }
     else
     {
-        std::map<int, mobile_t *>::iterator it = mobiles.find(id);
+        std::map<int, mobile_t *>::iterator it = mobiles.find(serial);
         if (it != mobiles.end())
         {
             return it->second;
@@ -1160,18 +1160,18 @@ mobile_t *game_get_mobile(uint32_t id)
         {
             mobile_t *m = (mobile_t *)malloc(sizeof(mobile_t));
             memset(m, 0, sizeof(*m));
-            m->id = id;
-            mobiles[id] = m;
+            m->serial = serial;
+            mobiles[serial] = m;
             return m;
         }
     }
 }
 
-void game_delete_object(uint32_t id)
+void game_delete_object(uint32_t serial)
 {
     // delete mobile
     {
-        std::map<int, mobile_t *>::iterator it = mobiles.find(id);
+        std::map<int, mobile_t *>::iterator it = mobiles.find(serial);
         if (it != mobiles.end())
         {
             // TODO: delete all equipped items, gumps etc
@@ -1182,7 +1182,7 @@ void game_delete_object(uint32_t id)
     }
     // delete item
     {
-        std::map<int, item_t *>::iterator it = items.find(id);
+        std::map<int, item_t *>::iterator it = items.find(serial);
         if (it != items.end())
         {
             // TODO: delete all contained items, gumps etc
@@ -1491,12 +1491,12 @@ int main()
                                 //printf("static\n");
                                 break;
                             case TYPE_ITEM:
-                                printf("item %x\n", pick_target->item.item->id);
-                                net_send_use(pick_target->item.item->id);
+                                printf("item %x\n", pick_target->item.item->serial);
+                                net_send_use(pick_target->item.item->serial);
                                 break;
                             case TYPE_MOBILE:
-                                printf("mobile %x\n", pick_target->mobile.mobile->id);
-                                net_send_use(pick_target->mobile.mobile->id);
+                                printf("mobile %x\n", pick_target->mobile.mobile->serial);
+                                net_send_use(pick_target->mobile.mobile->serial);
                                 break;
                             default:
                                 printf("unknown item picked :O\n");
@@ -1631,10 +1631,10 @@ int main()
                         //printf("static\n");
                         break;
                     case TYPE_ITEM:
-                        //printf("item %x\n", pick_slots[pick_id].item.item->id);
+                        //printf("item %x\n", pick_slots[pick_id].item.item->serial);
                         break;
                     case TYPE_MOBILE:
-                        //printf("mobile %x\n", pick_slots[pick_id].mobile.mobile->id);
+                        //printf("mobile %x\n", pick_slots[pick_id].mobile.mobile->serial);
                         break;
                     default:
                         printf("unknown item picked :O\n");
