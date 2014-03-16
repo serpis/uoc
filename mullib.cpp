@@ -25,6 +25,7 @@ static ml_hue             *hues                  = NULL;
 
 static ml_index           *anim_idx              = NULL;
 static ml_index           *art_idx               = NULL;
+static ml_index           *gump_idx              = NULL;
 static ml_index           *statics0_blocks_idx   = NULL;
 static ml_index           *statics1_blocks_idx   = NULL;
 
@@ -391,6 +392,68 @@ static void land(int offset, int length, ml_art **art, bool rotate)
 
     // do stuff...
     parse_land(p + offset, p + offset + length, art, rotate);
+
+    file_unmap(p, end);
+}
+
+static void parse_gump(const char *p, const char *end, int width, int height, ml_gump **g)
+{
+    //printf("gump %d %d\n", width, height);
+    int line_start_offsets[256];
+    assert(height < sizeof(line_start_offsets)/sizeof(line_start_offsets[0]));
+
+    const char *start = p;
+
+    for (int i = 0; i < height; i++)
+    {
+        line_start_offsets[i] = read_uint32_le(&p, end);
+        //printf("%d %d\n", i, line_start_offsets[i]);
+    }
+
+    int gump_size = sizeof(ml_gump) + 2 * width * height;
+    *g = (ml_gump *)malloc(gump_size);
+    (*g)->width = width;
+    (*g)->height = height;
+    uint16_t *target_data = (*g)->data;
+    memset(target_data, 0, 2 * width * height);
+
+    for (int i = 0; i < height; i++)
+    {
+        uint16_t *w = target_data + i * width;
+        p = start + line_start_offsets[i] * 4;
+
+        int accum_length = 0;
+
+        while (accum_length < width)
+        {
+            uint16_t color = read_uint16_le(&p, end);
+            int length = read_uint16_le(&p, end);
+
+            for (int j = 0; j < length; j++)
+            {
+                *w = color;
+                // set alpha...
+                if (*w) { *w |= 0x8000; }
+                w += 1;
+            }
+
+
+            accum_length += length;
+        }
+    }
+}
+
+static void gump(int offset, int length, int width, int height, ml_gump **g)
+{
+    const char *end;
+    const char *p = file_map("files/Gumpart.mul", &end);
+
+    assert(offset >= 0);
+    assert(length >= 0);
+    assert(p + offset + length <= end);
+
+    // do stuff...
+    parse_gump(p + offset, p + offset + length, width, height, g);
 
     file_unmap(p, end);
 }
@@ -773,6 +836,7 @@ void ml_init()
 
     index("files/anim.idx"   , &anim_idx);
     index("files/artidx.mul" , &art_idx);
+    index("files/Gumpidx.mul", &gump_idx);
     index("files/staidx0.mul", &statics0_blocks_idx);
     index("files/staidx1.mul", &statics1_blocks_idx);
     assert(anim_idx           != NULL);
@@ -888,6 +952,25 @@ ml_art *ml_read_static_art(int item_id)
     stat(offset, length, &art);
 
     return art;
+}
+
+ml_gump *ml_read_gump(int gump_id)
+{
+    assert(ml_inited);
+
+    assert(gump_id >= 0 && gump_id < gump_idx->entry_count);
+
+    int offset = gump_idx->entries[gump_id].offset;
+    int length = gump_idx->entries[gump_id].length;
+    uint32_t extra =  gump_idx->entries[gump_id].extra;
+
+    int width  = (extra >> 16) & 0xffff;
+    int height = (extra >>  0) & 0xffff;
+    
+    ml_gump *g = NULL;
+    gump(offset, length, width, height, &g);
+
+    return g;
 }
 
 ml_land_block *ml_read_land_block(int map, int block_x, int block_y)
@@ -1017,6 +1100,7 @@ enum ml_type
     ANIM,
     LAND_ART,
     STATIC_ART,
+    GUMP,
     LAND_BLOCK,
     STATICS_BLOCK
 };
@@ -1044,6 +1128,12 @@ struct async_req_t
             ml_art *res;
             void (*callback)(int item_id, ml_art *s);
         } static_art;
+        struct
+        {
+            int gump_id;
+            ml_gump *res;
+            void (*callback)(int gump_id, ml_gump *s);
+        } gump;
         struct
         {
             int map, block_x, block_y;
@@ -1095,6 +1185,10 @@ static void *mlt_worker_thread_main(void *)
         else if (req.type == STATIC_ART)
         {
             req.static_art.res = ml_read_static_art(req.static_art.item_id);
+        }
+        else if (req.type == GUMP)
+        {
+            req.gump.res = ml_read_gump(req.gump.gump_id);
         }
         else if (req.type == LAND_BLOCK)
         {
@@ -1167,6 +1261,18 @@ void mlt_read_static_art(int item_id, void (*callback)(int item_id, ml_art *s))
     async_requests.push(req);
 }
 
+void mlt_read_gump(int gump_id, void (*callback)(int gump_id, ml_gump *g))
+{
+    assert(mlt_inited);
+
+    async_req_t req;
+    req.type = GUMP;
+    req.gump.gump_id = gump_id;
+    req.gump.callback  = callback;
+    
+    async_requests.push(req);
+}
+
 void mlt_read_land_block(int map, int block_x, int block_y, void (*callback)(int map, int block_x, int block_y, ml_land_block *lb))
 {
     assert(mlt_inited);
@@ -1226,8 +1332,14 @@ void mlt_process_callbacks()
         else if (response.type == STATIC_ART)
         {
             int item_id = response.static_art.item_id;
-            ml_art *res   = response.static_art.res;
+            ml_art *res = response.static_art.res;
             response.static_art.callback(item_id, res);
+        }
+        else if (response.type == GUMP)
+        {
+            int gump_id  = response.gump.gump_id;
+            ml_gump *res = response.gump.res;
+            response.gump.callback(gump_id, res);
         }
         else if (response.type == LAND_BLOCK)
         {

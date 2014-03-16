@@ -434,6 +434,16 @@ static struct
     } entries[0x10000];
 } static_cache;
 
+static struct
+{
+    struct
+    {
+        bool valid;
+        bool fetching;
+        pixel_storage_i ps;
+    } entries[0x10000];
+} gump_cache;
+
 struct land_block_t
 {
     struct {
@@ -616,6 +626,38 @@ pixel_storage_i *get_static_ps(int item_id)
         return &static_cache.entries[item_id].ps;
     }
 }
+
+void write_gump_ps(int gump_id, ml_gump *g)
+{
+    gump_cache.entries[gump_id].ps = upload_tex2d(g->width, g->height, g->data);
+    free(g);
+
+    gump_cache.entries[gump_id].fetching = false;
+}
+
+pixel_storage_i *get_gump_ps(int gump_id)
+{
+    assert(gump_id >= 0 && gump_id < 0x10000);
+    if (!gump_cache.entries[gump_id].valid)
+    {
+        gump_cache.entries[gump_id].valid = true;
+        gump_cache.entries[gump_id].fetching = true;
+
+        printf("gump_cache       : loading %d\n", gump_id);
+
+        mlt_read_gump(gump_id, write_gump_ps);
+    }
+
+    if (gump_cache.entries[gump_id].fetching)
+    {
+        return NULL;
+    }
+    else
+    {
+        return &gump_cache.entries[gump_id].ps;
+    }
+}
+
 
 void write_land_block(int map, int block_x, int block_y, ml_land_block *lb)
 {
@@ -1399,6 +1441,16 @@ void draw_world()
     }
 }
 
+void draw_gump(int gump_id, int x, int y)
+{
+    pixel_storage_i *ps = get_gump_ps(gump_id);
+    // TODO: this null check shouldn't be necessary
+    if (ps)
+    {
+        blit_ps(ps, x, y, 0, 0, -1);
+    }
+}
+
 int main()
 {
     ml_init();
@@ -1677,6 +1729,9 @@ int main()
 
         picking_enabled = false;
         draw_world();
+
+        glClear(GL_DEPTH_BUFFER_BIT);
+        draw_gump(0x3c, 0, 0);
 
         //
         SDL_GL_SwapWindow(main_window);

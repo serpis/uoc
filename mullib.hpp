@@ -56,6 +56,13 @@ struct ml_art
     uint16_t data[];
 };
 
+struct ml_gump
+{
+    int width;
+    int height;
+    uint16_t data[];
+};
+
 struct ml_land_block
 {
     struct {
@@ -86,7 +93,8 @@ ml_hue             *ml_get_hue(int hue_id);
 // it is the caller's responsibility to free the memory returned from these
 ml_anim *ml_read_anim(int body_id, int action, int direction);
 ml_art *ml_read_land_art(int land_id);
-ml_art *ml_read_static_art(int static_id);
+ml_art *ml_read_static_art(int item_id);
+ml_gump *ml_read_gump(int gump_id);
 ml_land_block *ml_read_land_block(int map, int block_x, int block_y);
 ml_statics_block *ml_read_statics_block(int map, int block_x, int block_y);
 
@@ -98,7 +106,8 @@ void mlt_init();
 
 void mlt_read_anim(int body_id, int action, int direction, void (*callback)(int body_id, int action, int direction, ml_anim *a));
 void mlt_read_land_art(int land_id, void (*callback)(int land_id, ml_art *l));
-void mlt_read_static_art(int static_id, void (*callback)(int static_id, ml_art *s));
+void mlt_read_static_art(int item_id, void (*callback)(int item_id, ml_art *s));
+void mlt_read_gump(int gump_id, void (*callback)(int gump_id, ml_gump *g));
 void mlt_read_land_block(int map, int block_x, int block_y, void (*callback)(int map, int block_x, int block_y, ml_land_block *lb));
 void mlt_read_statics_block(int map, int block_x, int block_y, void (*callback)(int map, int block_x, int block_y, ml_statics_block *sb));
 
