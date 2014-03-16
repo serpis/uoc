@@ -1065,6 +1065,7 @@ void net_init()
     packet_lengths[0x77] = 17; // add mobile (no equipment)
     packet_lengths[0x78] = 0; // add mobile
     packet_lengths[0x82] = 2; // login denied
+    packet_lengths[0x88] = 66; // display paperdoll
     packet_lengths[0x89] = 0; // corpse clothing
     packet_lengths[0x8c] = 11; // connect to game server
     packet_lengths[0xa1] = 9; // set health
