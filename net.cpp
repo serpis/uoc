@@ -1017,7 +1017,7 @@ void net_poll()
                 }
                 case 0xbd: {
                     send_client_version_response("7.0.1");
-                    packet_lengths[0xb9] = 5; // expect longer packet after this..
+                    packet_lengths[0xb9] = 5; // expect longer packet after this.. (TODO: this should only be done for newer servers)
                     break;
                 }
                 case 0xbf: {
