@@ -34,6 +34,9 @@ const int TYPE_STATIC = 1;
 const int TYPE_ITEM   = 2;
 const int TYPE_MOBILE = 3;
 
+const int window_width = 800;
+const int window_height = 600;
+
 struct pick_target_t
 {
     int type;
@@ -770,29 +773,15 @@ void render(pixel_storage_i *ps, int xs[4], int ys[4], int draw_prio, int hue_id
         glBindTexture(GL_TEXTURE_1D, tex_hue);
         glActiveTexture(GL_TEXTURE0);
 
-        /*ml_hue *hue = ml_get_hue((hue_id & 0x7fff) - 1);
-        checkGLError(__LINE__);
-        glGenTextures(1, &tex_hue);
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_1D, tex_hue);
-        glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-        glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-        glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 32, 0, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, hue->colors);
-        glActiveTexture(GL_TEXTURE0);
-        checkGLError(__LINE__);*/
-
         bool only_grey = (hue_id & 0x8000) == 0;
         glUniform1i(glGetUniformLocation(prg_blit_hue, "tex_hue"), 1);
     }
     checkGLError(__LINE__);
 
-
-
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
-    glOrtho(0, 512, 512, 0, -1, 1);
+    glOrtho(0, window_width, window_height, 0, -1, 1);
 
     glBindTexture(GL_TEXTURE_2D, ps->tex);
 
@@ -822,8 +811,6 @@ void render(pixel_storage_i *ps, int xs[4], int ys[4], int draw_prio, int hue_id
 
     glBindTexture(GL_TEXTURE_2D, 0);
     checkGLError(__LINE__);
-
-
 
     glPopMatrix();
 
@@ -876,8 +863,8 @@ mobile_t player =
 //int player.y = 1537;
 //int player.z = 0;
 
-int screen_center_x = 256;
-int screen_center_y = 256;
+int screen_center_x = window_width / 2;
+int screen_center_y = window_height / 2;
 
 void world_to_screen(int world_x, int world_y, int world_z, int *screen_x, int *screen_y)
 {
@@ -1423,9 +1410,9 @@ int main()
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
     SDL_GL_SetAttribute(SDL_GL_DEPTH_SIZE, 24);
  
-    // Create our window centered at 512x512 resolution
+    // Create our window centered
     main_window = SDL_CreateWindow(":D", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        512, 512, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
+        window_width, window_height, SDL_WINDOW_OPENGL | SDL_WINDOW_SHOWN);
     if (!main_window)
     {
         sdl_die("Unable to create window");
@@ -1602,7 +1589,7 @@ int main()
         int world_center_block_y = player.y / 8;
 
         // because GL counts y starting from bottom of screen
-        int inverted_mouse_y = 512-mouse_y-1;
+        int inverted_mouse_y = window_height-mouse_y-1;
 
         draw_ceiling = find_ceiling(1, player.x, player.y, player.z);
         draw_roofs = true;
@@ -1618,7 +1605,7 @@ int main()
         glEnable(GL_SCISSOR_TEST);
         draw_world();
         glDisable(GL_SCISSOR_TEST);
-        glScissor(0, 0, 512, 512);
+        glScissor(0, 0, window_width, window_height);
 
         // do picking
         {
