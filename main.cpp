@@ -29,10 +29,11 @@
 
 #endif
 
-const int TYPE_LAND   = 0;
-const int TYPE_STATIC = 1;
-const int TYPE_ITEM   = 2;
-const int TYPE_MOBILE = 3;
+const int TYPE_LAND      = 0;
+const int TYPE_STATIC    = 1;
+const int TYPE_ITEM      = 2;
+const int TYPE_MOBILE    = 3;
+const int TYPE_GUMP      = 4;
 
 const int window_width = 800;
 const int window_height = 600;
@@ -57,6 +58,9 @@ struct pick_target_t
         {
             mobile_t *mobile;
         } mobile;
+        struct
+        {
+        } gump;
     };
 };
 static pick_target_t pick_slots[0x10000];
@@ -113,9 +117,22 @@ int pick_mobile(mobile_t *mobile)
     return next_pick_id++;
 }
 
+int pick_gump()
+{
+    if (!picking_enabled)
+    {
+        return -1;
+    }
+    assert(next_pick_id < sizeof(pick_slots)/sizeof(pick_slots[0]));
+    pick_slots[next_pick_id].type = TYPE_GUMP;
+    return next_pick_id++;
+}
+
+
 long now;
 
 std::map<int, item_t *> items;
+std::map<int, container_t *> containers;
 std::map<int, mobile_t *> mobiles;
 
 int draw_ceiling = 128;
@@ -1064,6 +1081,17 @@ void draw_world_land_block(int map, int block_x, int block_y)
     }
 }
 
+void draw_screen_item(int item_id, int x, int y, int hue_id, int pick_id)
+{
+    pixel_storage_i *ps = get_static_ps(item_id);
+    // TODO: this null check shouldn't be necessary
+    if (ps)
+    {
+        // TODO: figure out some kind of depth value
+        blit_ps(ps, x, y, 0, hue_id, pick_id);
+    }
+}
+
 void draw_world_item(int item_id, int x, int y, int z, int hue_id, int pick_id)
 {
     pixel_storage_i *ps = get_static_ps(item_id);
@@ -1248,6 +1276,33 @@ void game_delete_object(uint32_t serial)
             items.erase(it);
         }
     }
+}
+
+void game_display_container(uint32_t item_serial, int gump_id)
+{
+    std::map<int, container_t *>::iterator it = containers.find(item_serial);
+    if (it != containers.end())
+    {
+        container_t *container = it->second;
+        assert(container->gump_id == gump_id);
+        // TODO: remove all items in this container
+    }
+    else
+    {
+        container_t *container = (container_t *)malloc(sizeof(container_t));
+        memset(container, 0, sizeof(container_t));
+        container->gump_id = gump_id;
+
+        containers[item_serial] = container;
+    }
+}
+
+container_t *game_get_container(uint32_t item_serial)
+{
+    std::map<int, container_t *>::iterator it = containers.find(item_serial);
+    assert(it != containers.end());
+
+    return it->second;
 }
 
 int find_lowest_connected_roof(bool visited[64*64], int map, int start_x, int start_y, int x, int y)
@@ -1441,13 +1496,28 @@ void draw_world()
     }
 }
 
-void draw_gump(int gump_id, int x, int y)
+void draw_gump(int gump_id, int x, int y, int pick_id)
 {
     pixel_storage_i *ps = get_gump_ps(gump_id);
     // TODO: this null check shouldn't be necessary
     if (ps)
     {
-        blit_ps(ps, x, y, 0, 0, -1);
+        blit_ps(ps, x, y, 0, 0, pick_id);
+    }
+}
+
+void draw_container(container_t *container)
+{
+    draw_gump(container->gump_id, container->x, container->y, pick_gump());
+    for (int i = 0; i < container->item_count; i++)
+    {
+        uint32_t serial = container->items[i].serial;
+        item_t *item = game_get_item(serial);
+        int item_id = container->items[i].item_id;
+        int x = container->x + container->items[i].x;
+        int y = container->y + container->items[i].y;
+        int hue_id = container->items[i].hue_id;
+        draw_screen_item(item_id, x, y, hue_id, pick_item(item));
     }
 }
 
@@ -1565,6 +1635,9 @@ int main()
                                 printf("mobile %x\n", pick_target->mobile.mobile->serial);
                                 net_send_use(pick_target->mobile.mobile->serial);
                                 break;
+                            case TYPE_GUMP:
+                                //printf("gump\n");
+                                break;
                             default:
                                 printf("unknown item picked :O\n");
                                 break;
@@ -1672,6 +1745,16 @@ int main()
         glScissor(mouse_x, inverted_mouse_y, 1, 1);
         glEnable(GL_SCISSOR_TEST);
         draw_world();
+        glClear(GL_DEPTH_BUFFER_BIT);
+        // draw gumps
+        {
+            std::map<int, container_t *>::iterator it;
+            for (it = containers.begin(); it != containers.end(); ++it)
+            {
+                container_t *container = it->second;
+                draw_container(container);
+            }
+        }
         glDisable(GL_SCISSOR_TEST);
         glScissor(0, 0, window_width, window_height);
 
@@ -1703,6 +1786,9 @@ int main()
                     case TYPE_MOBILE:
                         //printf("mobile %x\n", pick_slots[pick_id].mobile.mobile->serial);
                         break;
+                    case TYPE_GUMP:
+                        //printf("gump\n");
+                        break;
                     default:
                         printf("unknown item picked :O\n");
                         break;
@@ -1731,7 +1817,15 @@ int main()
         draw_world();
 
         glClear(GL_DEPTH_BUFFER_BIT);
-        draw_gump(0x3c, 0, 0);
+        // draw gumps
+        {
+            std::map<int, container_t *>::iterator it;
+            for (it = containers.begin(); it != containers.end(); ++it)
+            {
+                container_t *container = it->second;
+                draw_container(container);
+            }
+        }
 
         //
         SDL_GL_SwapWindow(main_window);

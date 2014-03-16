@@ -739,6 +739,40 @@ void net_poll()
                     //printf("move ack seq %d\n", seq);
                     break;
                 }
+                case 0x24: {
+                    uint32_t item_serial = read_uint32_be(&p, end);
+                    int gump_id = read_uint16_be(&p, end);
+
+                    game_display_container(item_serial, gump_id);
+
+                    break;
+                }
+                case 0x25: {
+                    uint32_t serial = read_uint32_be(&p, end);
+                    int item_id = read_uint16_be(&p, end);
+                    read_uint8(&p, end);
+                    int amount = read_uint16_be(&p, end);
+                    int x = read_sint16_be(&p, end);
+                    int y = read_sint16_be(&p, end);
+                    read_uint8(&p, end); // grid location?
+                    uint32_t cont_serial = read_uint32_be(&p, end);
+                    int hue_id = read_uint16_be(&p, end);
+
+                    container_t *container = game_get_container(cont_serial);
+                    // TODO: don't use magic constant here
+                    assert(container->item_count < 256);
+                    // TODO: don't just add another item, instead modify the existing item, if any..
+                    container->items[container->item_count].serial = serial;
+                    container->items[container->item_count].x = x;
+                    container->items[container->item_count].y = y;
+                    container->items[container->item_count].item_id = item_id;
+                    container->items[container->item_count].hue_id = hue_id;
+                    container->item_count += 1;
+
+                    printf("adding item to container: %08x\n", serial);
+
+                    break;
+                }
                 case 0x2e: {
                     uint32_t serial = read_uint32_be(&p, end);
                     int item_id = read_uint16_be(&p, end);
@@ -751,6 +785,35 @@ void net_poll()
                     //printf("0x2e: hue_id = %04x\n", hue_id);
                     game_equip(m, serial, item_id, layer, hue_id);
 
+                    break;
+                }
+                case 0x3c: {
+                    int item_count = read_uint16_be(&p, end);
+
+                    for (int i = 0; i < item_count; i++)
+                    {
+                        uint32_t serial = read_uint32_be(&p, end);
+                        int item_id = read_uint16_be(&p, end);
+                        read_uint8(&p, end);
+                        int amount = read_uint16_be(&p, end);
+                        int x = read_sint16_be(&p, end);
+                        int y = read_sint16_be(&p, end);
+                        read_uint8(&p, end); // grid location?
+                        uint32_t cont_serial = read_uint32_be(&p, end);
+                        int hue_id = read_uint16_be(&p, end);
+
+                        container_t *container = game_get_container(cont_serial);
+                        // TODO: don't use magic constant here
+                        assert(container->item_count < 256);
+                        container->items[container->item_count].serial = serial;
+                        container->items[container->item_count].x = x;
+                        container->items[container->item_count].y = y;
+                        container->items[container->item_count].item_id = item_id;
+                        container->items[container->item_count].hue_id = hue_id;
+                        container->item_count += 1;
+
+                        printf("adding item to container: %08x\n", serial);
+                    }
                     break;
                 }
                 case 0x77: {
