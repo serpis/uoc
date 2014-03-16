@@ -1135,6 +1135,7 @@ item_t *game_get_item(uint32_t serial)
     }
     else
     {
+        assert(it == items.end());
         item_t *i = (item_t *)malloc(sizeof(item_t));
         memset(i, 0, sizeof(*i));
         i->serial = serial;
@@ -1152,19 +1153,33 @@ mobile_t *game_get_mobile(uint32_t serial)
     else
     {
         std::map<int, mobile_t *>::iterator it = mobiles.find(serial);
+        assert(it != mobiles.end());
+        return it->second;
+    }
+}
+
+mobile_t *game_create_mobile(uint32_t serial)
+{
+    // servers will often create mobiles that already exist,
+    // so first we'll check if the mobile already exists.
+    if (player.serial == serial)
+    {
+        return &player;
+    }
+    else
+    {
+        std::map<int, mobile_t *>::iterator it = mobiles.find(serial);
         if (it != mobiles.end())
         {
             return it->second;
         }
-        else
-        {
-            mobile_t *m = (mobile_t *)malloc(sizeof(mobile_t));
-            memset(m, 0, sizeof(*m));
-            m->serial = serial;
-            mobiles[serial] = m;
-            return m;
-        }
     }
+
+    mobile_t *m = (mobile_t *)malloc(sizeof(mobile_t));
+    memset(m, 0, sizeof(*m));
+    m->serial = serial;
+    mobiles[serial] = m;
+    return m;
 }
 
 void game_delete_object(uint32_t serial)

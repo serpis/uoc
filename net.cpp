@@ -699,6 +699,7 @@ void net_poll()
                 }
                 case 0x1d: {
                     uint32_t serial = read_uint32_be(&p, end);
+                    //printf("delete object %x\n", serial);
                     game_delete_object(serial);
                     break;
                 }
@@ -769,7 +770,7 @@ void net_poll()
                 }
                 case 0x78: {
                     uint32_t mob_serial = read_uint32_be(&p, end);
-                    mobile_t *m = game_get_mobile(mob_serial);
+                    mobile_t *m = game_create_mobile(mob_serial);
 
                     m->body_id = read_uint16_be(&p, end);
                     m->x = read_uint16_be(&p, end);
@@ -1045,7 +1046,7 @@ void net_init()
     packet_lengths[0x1b] = 37; // login confirm
     packet_lengths[0x1c] = 0; // text ascii
     packet_lengths[0x1d] = 5; // delete item
-    packet_lengths[0x20] = 19; // add mobile
+    packet_lengths[0x20] = 19; // update mobile
     packet_lengths[0x21] = 8; // move reject
     packet_lengths[0x22] = 3; // move accept
     packet_lengths[0x25] = 21; // container update
@@ -1062,8 +1063,8 @@ void net_init()
     packet_lengths[0x6d] = 3; // play music
     packet_lengths[0x6e] = 14; // character animation
     packet_lengths[0x72] = 5; // set war mode
-    packet_lengths[0x77] = 17; // add mobile (no equipment)
-    packet_lengths[0x78] = 0; // add mobile
+    packet_lengths[0x77] = 17; // move mobile
+    packet_lengths[0x78] = 0; // incoming mobile
     packet_lengths[0x82] = 2; // login denied
     packet_lengths[0x88] = 66; // display paperdoll
     packet_lengths[0x89] = 0; // corpse clothing
@@ -1076,6 +1077,7 @@ void net_init()
     packet_lengths[0xaa] = 5; // set combatant
     packet_lengths[0xae] = 0; // unicode speech
     packet_lengths[0xaf] = 13; // death animation
+    packet_lengths[0xb0] = 0; // display gump fast
     packet_lengths[0xb9] = 3; // enable client features
     packet_lengths[0xbd] = 0; // client version request
     packet_lengths[0xbc] = 3; // season
@@ -1083,6 +1085,7 @@ void net_init()
     packet_lengths[0xc0] = 36; // hued effect
     packet_lengths[0xc1] = 0; // cliloc message
     packet_lengths[0xdc] = 9; // item revision
+    packet_lengths[0xdd] = 0; // display gump packed
     packet_lengths[0xdf] = 0; // "buff/debuff system" <- what is this?
     packet_lengths[0xf3] = 24; // add item (new version)
 
