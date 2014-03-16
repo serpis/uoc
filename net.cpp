@@ -240,6 +240,17 @@ void net_send_move(int dir)
     send_packet(data, end);
 }
 
+void net_send_use(uint32_t serial)
+{
+    char data[5];
+    char *p = data;
+    char *end = p + sizeof(data);
+    write_uint8(&p, end, 0x06);
+    write_uint32_be(&p, end, serial);
+    assert(p == end);
+    send_packet(data, end);
+}
+
 extern int huffman_tree[256][2];
 
 void find_parent(int n, int *from, int *bit)
@@ -659,6 +670,9 @@ void net_poll()
                     item->x = x;
                     item->y = y;
                     item->z = z;
+                    item->hue_id = hue_id;
+
+                    //printf("0x1a: hue_id = %04x\n", hue_id);
 
                     break;
                 }
@@ -679,7 +693,7 @@ void net_poll()
                     printf("map width: %d height: %d\n", map_width, map_height);
                     read_uint32_be(&p, end);
                     read_uint16_be(&p, end);
-                    game_set_player_info(id, body_id, x, y, z, dir);
+                    game_set_player_info(id, body_id, x, y, z, 0, dir);
 
                     break;
                 }
@@ -692,14 +706,15 @@ void net_poll()
                     uint32_t id = read_uint32_be(&p, end);
                     int body_id = read_uint16_be(&p, end);
                     read_uint8(&p, end);
-                    int hue = read_uint16_be(&p, end);
+                    int hue_id = read_uint16_be(&p, end);
                     int flags = read_uint8(&p, end);
                     int x = read_uint16_be(&p, end);
                     int y = read_uint16_be(&p, end);
                     read_uint16_be(&p, end);
                     int dir = read_uint8(&p, end);
                     int z = read_sint8(&p, end);
-                    game_set_player_info(id, body_id, x, y, z, dir);
+                    //printf("0x20: hue_id = %04x\n", hue_id);
+                    game_set_player_info(id, body_id, x, y, z, hue_id, dir);
                     break;
                 }
                 case 0x21: {
@@ -712,7 +727,7 @@ void net_poll()
                     // reset movement sequence
                     sequence = 0;
 
-                    printf("move reject seq %d\n", seq);
+                    //printf("move reject seq %d\n", seq);
                     game_set_player_pos(x, y, z, dir);
                     break;
                 }
@@ -720,7 +735,7 @@ void net_poll()
                     int seq = read_uint8(&p, end);
                     uint8_t status = read_uint8(&p, end);
 
-                    printf("move ack seq %d\n", seq);
+                    //printf("move ack seq %d\n", seq);
                     break;
                 }
                 case 0x2e: {
@@ -729,10 +744,11 @@ void net_poll()
                     read_uint8(&p, end);
                     int layer = read_uint8(&p, end);
                     uint32_t mob_id = read_uint32_be(&p, end);
-                    int hue = read_uint16_be(&p, end);
+                    int hue_id = read_uint16_be(&p, end);
 
                     mobile_t *m = game_get_mobile(mob_id);
-                    game_equip(m, id, item_id, layer, hue);
+                    //printf("0x2e: hue_id = %04x\n", hue_id);
+                    game_equip(m, id, item_id, layer, hue_id);
 
                     break;
                 }
@@ -745,7 +761,8 @@ void net_poll()
                     m->y = read_uint16_be(&p, end);
                     m->z = read_sint8(&p, end);
                     m->dir = read_uint8(&p, end);
-                    m->hue = read_uint16_be(&p, end);
+                    m->hue_id = read_uint16_be(&p, end);
+                    //printf("0x77: hue_id = %04x\n", m->hue_id);
                     read_uint8(&p, end); // status.. TODO: what is this?
                     m->noto = read_uint8(&p, end);
                     break;
@@ -759,7 +776,8 @@ void net_poll()
                     m->y = read_uint16_be(&p, end);
                     m->z = read_sint8(&p, end);
                     m->dir = read_uint8(&p, end);
-                    m->hue = read_uint16_be(&p, end);
+                    m->hue_id = read_uint16_be(&p, end);
+                    //printf("0x78: mob.hue_id = %04x\n", m->hue_id);
                     read_uint8(&p, end); // status.. TODO: what is this?
                     m->noto = read_uint8(&p, end);
                     while (true)
@@ -771,14 +789,15 @@ void net_poll()
                         }
                         int item_id = read_uint16_be(&p, end);
                         int layer = read_uint8(&p, end);
-                        int hue = 0;
+                        int hue_id = 0;
                         if (item_id & 0x8000)
                         {
-                            hue = read_uint16_be(&p, end);
+                            hue_id = read_uint16_be(&p, end);
                             item_id &= 0x7fff;
                         }
-                        printf("mob %x, equip %x %d %d %d\n", mob_id, id, item_id, layer, hue);
-                        game_equip(m, id, item_id, layer, hue);
+                        //printf("0x78: item.hue_id = %04x\n", m->hue_id);
+                        //printf("mob %x, equip %x %d %d %d\n", mob_id, id, item_id, layer, hue_id);
+                        game_equip(m, id, item_id, layer, hue_id);
                     }
 
                     break;
@@ -964,7 +983,8 @@ void net_poll()
                     int y = read_uint16_be(&p, end);
                     int z = read_sint8(&p, end);
                     int layer = read_uint8(&p, end);
-                    int hue = read_uint16_be(&p, end);
+                    int hue_id = read_uint16_be(&p, end);
+                    //printf("0xf3: hue_id = %04x\n", hue_id);
                     int flag = read_uint8(&p, end);
 
                     if (type == 0)
@@ -974,6 +994,7 @@ void net_poll()
                         item->x = x;
                         item->y = y;
                         item->z = z;
+                        item->hue_id = hue_id;
                     }
                     else
                     {

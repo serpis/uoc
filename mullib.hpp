@@ -19,6 +19,14 @@ struct ml_item_data_entry
     char name[21];
 };
 
+struct ml_hue
+{
+    uint16_t colors[32];
+    uint16_t start_color;
+    uint16_t end_color;
+    char name[21];
+};
+
 struct ml_index
 {
     int entry_count;
@@ -73,6 +81,7 @@ void ml_init();
 // the data returned should NOT be freed!
 ml_tile_data_entry *ml_get_tile_data(int tile_id);
 ml_item_data_entry *ml_get_item_data(int item_id);
+ml_hue             *ml_get_hue(int hue_id);
 
 // it is the caller's responsibility to free the memory returned from these
 ml_anim *ml_read_anim(int body_id, int action, int direction);

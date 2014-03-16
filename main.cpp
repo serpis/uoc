@@ -23,6 +23,7 @@
 
  #define GL3_PROTOTYPES 1
  #include <OpenGL/gl.h>
+ #include <OpenGL/glu.h>
  
  #include <SDL2/SDL.h>
 
@@ -33,7 +34,7 @@ const int TYPE_STATIC = 1;
 const int TYPE_ITEM   = 2;
 const int TYPE_MOBILE = 3;
 
-static struct
+struct pick_target_t
 {
     int type;
     union
@@ -54,9 +55,12 @@ static struct
             mobile_t *mobile;
         } mobile;
     };
-} pick_slots[0x10000];
+};
+static pick_target_t pick_slots[0x10000];
 static bool picking_enabled = false;
 static int next_pick_id = 0;
+
+pick_target_t *pick_target = NULL;
 
 int pick_land(int x, int y)
 {
@@ -114,7 +118,8 @@ std::map<int, mobile_t *> mobiles;
 int draw_ceiling = 128;
 bool draw_roofs = true;
 
-int prg_blit_copy;
+int prg_blit_picking;
+int prg_blit_hue;
 
 /* A simple function that prints a message, the error code returned by SDL,
  * and quits the application */
@@ -139,15 +144,18 @@ void checkSDLError(int line = -1)
 #endif
 }
 
-void checkGLError(int line = -1)
+bool checkGLError(int line = -1)
 {
     GLenum err;
+    bool found_error = false;
     while ((err = glGetError()) != GL_NO_ERROR)
     {
-        printf("GL Error: %d\n", err);
+        printf("GL Error: %d %s\n", err, gluErrorString(err));
 		if (line != -1)
 			printf(" + line: %i\n", line);
+        found_error = true;
     }
+    return found_error;
 }
 
 int gfx_compile_shader(const char *name, int type, const char *src, const char *end)
@@ -299,7 +307,27 @@ int round_up_to_2pot(int n)
     }
 }
 
-pixel_storage_i upload(int width, int height, void *data)
+unsigned int upload_tex1d(int width, void *data)
+{
+    unsigned int tex;
+
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_1D, tex);
+    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, width, 0, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, data);
+    glBindTexture(GL_TEXTURE_1D, 0);
+
+    if (checkGLError(__LINE__))
+    {
+        printf("error uploading 1d texture w: %d\n", width);
+    }
+    
+    return tex;
+}
+
+pixel_storage_i upload_tex2d(int width, int height, void *data)
 {
     int texture_width;
     int texture_height;
@@ -318,6 +346,8 @@ pixel_storage_i upload(int width, int height, void *data)
         texture_height = height;
     }
 
+    checkGLError(__LINE__);
+
     unsigned int tex;
     glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
 
@@ -330,6 +360,11 @@ pixel_storage_i upload(int width, int height, void *data)
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture_width, texture_height, 0, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, 0);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, data);
     glBindTexture(GL_TEXTURE_2D, 0);
+
+    if (checkGLError(__LINE__))
+    {
+        printf("error uploading 2d texture w, h: %d, %d\n", texture_width, texture_height);
+    }
 
     pixel_storage_i ps;
     ps.width = width;
@@ -351,6 +386,15 @@ struct anim_frame_t
     int center_x, center_y;
     pixel_storage_i ps;
 };
+
+static struct
+{
+    struct
+    {
+        bool valid;
+        unsigned int tex;
+    } entries[8*375];
+} hue_cache;
 
 static struct
 {
@@ -430,6 +474,21 @@ static struct
     } entries[8 * 8];
 } statics_block_cache;
 
+unsigned int get_hue_tex(int hue_id)
+{
+    assert(hue_id > 0 && hue_id < 8*375);
+    if (!hue_cache.entries[hue_id-1].valid)
+    {
+        hue_cache.entries[hue_id-1].valid = true;
+
+        ml_hue *hue = ml_get_hue(hue_id-1);
+        hue_cache.entries[hue_id-1].tex = upload_tex1d(32, hue->colors);
+    }
+
+    return hue_cache.entries[hue_id-1].tex;
+}
+
+
 void write_anim_frames(int body_id, int action, int direction, ml_anim *anim)
 {
     int body_action_id = body_id * 35 + action;
@@ -440,7 +499,7 @@ void write_anim_frames(int body_id, int action, int direction, ml_anim *anim)
     {
         frames[j].center_x = anim->frames[j].center_x;
         frames[j].center_y = anim->frames[j].center_y;
-        frames[j].ps = upload(anim->frames[j].width, anim->frames[j].height, anim->frames[j].data);
+        frames[j].ps = upload_tex2d(anim->frames[j].width, anim->frames[j].height, anim->frames[j].data);
     }
 
     anim_cache.entries[body_action_id].directions[direction].frame_count = anim->frame_count;
@@ -493,7 +552,7 @@ anim_frame_t *get_anim_frames(int body_id, int action, int direction, int *frame
 
 void write_land_ps(int land_id, ml_art *l)
 {
-    land_cache.entries[land_id].ps = upload(l->width, l->height, l->data);
+    land_cache.entries[land_id].ps = upload_tex2d(l->width, l->height, l->data);
     free(l);
 
     land_cache.entries[land_id].fetching = false;
@@ -525,7 +584,7 @@ pixel_storage_i *get_land_ps(int land_id)
 
 void write_static_ps(int item_id, ml_art *s)
 {
-    static_cache.entries[item_id].ps = upload(s->width, s->height, s->data);
+    static_cache.entries[item_id].ps = upload_tex2d(s->width, s->height, s->data);
     free(s);
 
     static_cache.entries[item_id].fetching = false;
@@ -684,8 +743,52 @@ statics_block_t *get_statics_block(int map, int block_x, int block_y)
 }
 
 
-void render(pixel_storage_i *ps, int xs[4], int ys[4], int draw_prio, int id)
+void render(pixel_storage_i *ps, int xs[4], int ys[4], int draw_prio, int hue_id, int pick_id)
 {
+    bool use_picking = pick_id != -1;
+    bool use_hue = hue_id != 0;
+    unsigned int tex_hue;
+
+    if (use_picking)
+    {
+        int pick_id0 = (pick_id >> 16) & 0xff;
+        int pick_id1 = (pick_id >>  8) & 0xff;
+        int pick_id2 = (pick_id >>  0) & 0xff;
+        float pick_id_vec[3] = { pick_id0 / 255.0f, pick_id1 / 255.0f, pick_id2 / 255.0f };
+        glUseProgram(prg_blit_picking);
+        glUniform1i(glGetUniformLocation(prg_blit_picking, "tex"), 0);
+        glUniform3fv(glGetUniformLocation(prg_blit_picking, "pick_id"), 1, pick_id_vec);
+    }
+    else if (use_hue)
+    {
+        glUseProgram(prg_blit_hue);
+        glUniform1i(glGetUniformLocation(prg_blit_hue, "tex"), 0);
+
+        unsigned int tex_hue = get_hue_tex(hue_id & 0x7fff);
+
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_1D, tex_hue);
+        glActiveTexture(GL_TEXTURE0);
+
+        /*ml_hue *hue = ml_get_hue((hue_id & 0x7fff) - 1);
+        checkGLError(__LINE__);
+        glGenTextures(1, &tex_hue);
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_1D, tex_hue);
+        glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+        glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+        glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, 32, 0, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, hue->colors);
+        glActiveTexture(GL_TEXTURE0);
+        checkGLError(__LINE__);*/
+
+        bool only_grey = (hue_id & 0x8000) == 0;
+        glUniform1i(glGetUniformLocation(prg_blit_hue, "tex_hue"), 1);
+    }
+    checkGLError(__LINE__);
+
+
+
     glMatrixMode(GL_PROJECTION);
     glPushMatrix();
     glLoadIdentity();
@@ -700,17 +803,8 @@ void render(pixel_storage_i *ps, int xs[4], int ys[4], int draw_prio, int id)
     glEnable(GL_DEPTH_TEST);
     glEnable(GL_ALPHA_TEST);
 
-    bool use_shader = id != -1;
-    if (use_shader)
-    {
-        int id0 = (id >> 16) & 0xff;
-        int id1 = (id >>  8) & 0xff;
-        int id2 = (id >>  0) & 0xff;
-        float id_vec[3] = { id0 / 255.0f, id1 / 255.0f, id2 / 255.0f };
-        glUseProgram(prg_blit_copy);
-        glUniform1i(glGetUniformLocation(prg_blit_copy, "tex"), 0);
-        glUniform3fv(glGetUniformLocation(prg_blit_copy, "id"), 1, id_vec);
-    }
+    checkGLError(__LINE__);
+
 
     glBegin(GL_QUADS);
     for (int i = 0; i < 4; i++)
@@ -720,36 +814,47 @@ void render(pixel_storage_i *ps, int xs[4], int ys[4], int draw_prio, int id)
     }
     glEnd();
 
-    if (use_shader)
-    {
-        glUseProgram(0);
-    }
+    checkGLError(__LINE__);
 
     glDisable(GL_ALPHA_TEST);
     glDisable(GL_DEPTH_TEST);
     glDisable(GL_TEXTURE_2D);
 
     glBindTexture(GL_TEXTURE_2D, 0);
+    checkGLError(__LINE__);
 
 
 
     glPopMatrix();
+
+    checkGLError(__LINE__);
+    if (use_picking)
+    {
+        glUseProgram(0);
+        checkGLError(__LINE__);
+    }
+    else if (use_hue)
+    {
+        glUseProgram(0);
+        checkGLError(__LINE__);
+    }
+    checkGLError(__LINE__);
 }
 
-void blit_ps(pixel_storage_i *ps, int x, int y, int draw_prio, int id)
+void blit_ps(pixel_storage_i *ps, int x, int y, int draw_prio, int hue_id, int pick_id)
 {
     int xs[4] = { x, x + ps->width, x + ps->width, x };
     int ys[4] = { y, y, y + ps->height, y + ps->height };
 
-    render(ps, xs, ys, draw_prio, id);
+    render(ps, xs, ys, draw_prio, hue_id, pick_id);
 }
 
-void blit_ps_flipped(pixel_storage_i *ps, int x, int y, int draw_prio, int id)
+void blit_ps_flipped(pixel_storage_i *ps, int x, int y, int draw_prio, int hue_id, int pick_id)
 {
     int xs[4] = { x + ps->width, x, x, x + ps->width };
     int ys[4] = { y, y, y + ps->height, y + ps->height };
 
-    render(ps, xs, ys, draw_prio, id);
+    render(ps, xs, ys, draw_prio, hue_id, pick_id);
 }
 
 mobile_t player =
@@ -816,7 +921,7 @@ int land_block_z_slow(int x, int y)
 }
 
 // this might be optimized when it comes to z calculations
-void draw_world_land_ps(pixel_storage_i *ps, int x, int y, int id)
+void draw_world_land_ps(pixel_storage_i *ps, int x, int y, int pick_id)
 {
     int dxs[4] = { 0, 1, 1, 0 };
     int dys[4] = { 0, 0, 1, 1 };
@@ -853,10 +958,10 @@ void draw_world_land_ps(pixel_storage_i *ps, int x, int y, int id)
             min_z = zs[i];
         }
     }
-    render(ps, xs, ys, world_draw_prio(x, y, min_z), id);
+    render(ps, xs, ys, world_draw_prio(x, y, min_z), 0, pick_id);
 }
 
-void draw_world_art_ps(pixel_storage_i *ps, int x, int y, int z, int height, int id)
+void draw_world_art_ps(pixel_storage_i *ps, int x, int y, int z, int height, int hue_id, int pick_id)
 {
     if (z >= draw_ceiling)
     {
@@ -872,10 +977,10 @@ void draw_world_art_ps(pixel_storage_i *ps, int x, int y, int z, int height, int
     screen_y -= ps->height;
     // statics tiles are shifted half a world unit downwards
     screen_y += 22;
-    blit_ps(ps, screen_x, screen_y, world_draw_prio(x, y, z+height), id);
+    blit_ps(ps, screen_x, screen_y, world_draw_prio(x, y, z+height), hue_id, pick_id);
 }
 
-void draw_world_anim_frame(anim_frame_t *frame, bool flip, int x, int y, int z, int id)
+void draw_world_anim_frame(anim_frame_t *frame, bool flip, int x, int y, int z, int hue_id, int pick_id)
 {
     pixel_storage_i *ps = &frame->ps;
     int screen_x;
@@ -889,23 +994,23 @@ void draw_world_anim_frame(anim_frame_t *frame, bool flip, int x, int y, int z, 
     {
         // offset by frame's center in x
         screen_x -= (frame->ps.width - frame->center_x - 1);
-        blit_ps_flipped(ps, screen_x, screen_y, world_draw_prio(x, y, z), id);
+        blit_ps_flipped(ps, screen_x, screen_y, world_draw_prio(x, y, z), hue_id, pick_id);
     }
     else
     {
         // offset by frame's center in x
         screen_x -= frame->center_x;
-        blit_ps(ps, screen_x, screen_y, world_draw_prio(x, y, z), id);
+        blit_ps(ps, screen_x, screen_y, world_draw_prio(x, y, z), hue_id, pick_id);
     }
 }
 
-void draw_world_land(int tile_id, int x, int y, int id)
+void draw_world_land(int tile_id, int x, int y, int pick_id)
 {
     pixel_storage_i *ps = get_land_ps(tile_id);
     // TODO: this null check shouldn't be necessary
     if (ps)
     {
-        draw_world_land_ps(ps, x, y, id);
+        draw_world_land_ps(ps, x, y, pick_id);
     }
 }
 
@@ -924,24 +1029,24 @@ void draw_world_land_block(int map, int block_x, int block_y)
 
             int x = 8 * block_x + dx;
             int y = 8 * block_y + dy;
-            int id = pick_land(x, y);
-            draw_world_land(tile_id, x, y, id);
+            int pick_id = pick_land(x, y);
+            draw_world_land(tile_id, x, y, pick_id);
         }
     }
 }
 
-void draw_world_item(int item_id, int x, int y, int z, int id)
+void draw_world_item(int item_id, int x, int y, int z, int hue_id, int pick_id)
 {
     pixel_storage_i *ps = get_static_ps(item_id);
     // TODO: this null check shouldn't be necessary
     if (ps)
     {
         int height = ml_get_item_data(item_id)->height;
-        draw_world_art_ps(ps, x,  y, z, height, id);
+        draw_world_art_ps(ps, x,  y, z, height, hue_id, pick_id);
     }
 }
 
-void draw_world_anim(int body_id, int action, int direction, int x, int y, int z, int id)
+void draw_world_anim(int body_id, int action, int direction, int x, int y, int z, int hue_id, int pick_id)
 {
     int frame_count;
     bool flip = false;
@@ -955,25 +1060,26 @@ void draw_world_anim(int body_id, int action, int direction, int x, int y, int z
     // TODO: this null check shouldn't be necessary
     if (frames)
     {
-        draw_world_anim_frame(&frames[(now / 200) % frame_count], flip, x, y, z, id);
+        draw_world_anim_frame(&frames[(now / 200) % frame_count], flip, x, y, z, hue_id, pick_id);
     }
 }
 
 
-void draw_world_mobile(mobile_t *mobile, int id)
+void draw_world_mobile(mobile_t *mobile, int pick_id)
 {
-    draw_world_anim(mobile->body_id, 0, mobile->dir, mobile->x, mobile->y, mobile->z, id);
+    draw_world_anim(mobile->body_id, 0, mobile->dir, mobile->x, mobile->y, mobile->z, mobile->hue_id, pick_id);
     for (int i = 0; i < 32; i++)
     {
         int layer = i;
         int item_id = mobile->equipped_item_id[layer];
+        int hue_id = mobile->equipped_hue_id[layer];
         if (item_id != 0)
         {
             ml_item_data_entry *item_data = ml_get_item_data(item_id);
             if (item_data->animation != 0)
             {
                 //printf("drawing anim for item_id %d (%s)\n", item_id, item_data->name);
-                draw_world_anim(item_data->animation, 0, mobile->dir, mobile->x, mobile->y, mobile->z, id);
+                draw_world_anim(item_data->animation, 0, mobile->dir, mobile->x, mobile->y, mobile->z, hue_id, pick_id);
             }
         }
     }
@@ -999,12 +1105,12 @@ void draw_world_statics_block(int map, int block_x, int block_y)
                 continue;
             }
 
-            draw_world_item(item_id, 8 * block_x + dx, 8 * block_y + dy, z, pick_static());
+            draw_world_item(item_id, 8 * block_x + dx, 8 * block_y + dy, z, 0, pick_static());
         }
     }
 }
 
-void game_set_player_info(uint32_t id, int body_id, int x, int y, int z, int dir)
+void game_set_player_info(uint32_t id, int body_id, int x, int y, int z, int hue_id, int dir)
 {
     printf("player id: %x\n", id);
     player.id = id;
@@ -1012,23 +1118,25 @@ void game_set_player_info(uint32_t id, int body_id, int x, int y, int z, int dir
     player.x = x;
     player.y = y;
     player.z = z;
+    player.hue_id = hue_id;
     player.dir = dir;
 }
 
 void game_set_player_pos(int x, int y, int z, int dir)
 {
-    printf("player pos: %d %d %d\n", x, y, z);
+    //printf("player pos: %d %d %d\n", x, y, z);
     player.x = x;
     player.y = y;
     player.z = z;
     player.dir = dir;
 }
 
-void game_equip(mobile_t *m, int id, int item_id, int layer, int hue)
+void game_equip(mobile_t *m, int id, int item_id, int layer, int hue_id)
 {
     // TODO: track item..
     assert(layer >= 0 && layer < 32);
     m->equipped_item_id[layer] = item_id;
+    m->equipped_hue_id[layer] = hue_id;
 }
 
 item_t *game_get_item(uint32_t id)
@@ -1272,7 +1380,7 @@ void draw_world()
         for (it = items.begin(); it != items.end(); ++it)
         {
             item_t *item = it->second;
-            draw_world_item(item->item_id, item->x, item->y, item->z, pick_item(item));
+            draw_world_item(item->item_id, item->x, item->y, item->z, item->hue_id, pick_item(item));
         }
     }
     // draw mobiles
@@ -1329,7 +1437,8 @@ int main()
     main_context = SDL_GL_CreateContext(main_window);
     checkSDLError(__LINE__);
 
-    prg_blit_copy = gfx_upload_program("blit_copy.vert", "blit_copy.frag");
+    prg_blit_picking = gfx_upload_program("blit_picking.vert", "blit_picking.frag");
+    prg_blit_hue     = gfx_upload_program("blit_hue.vert", "blit_hue.frag");
  
     // 0 = free running
     // 1 = vsync
@@ -1381,6 +1490,32 @@ int main()
             }
             if (e.type == SDL_MOUSEBUTTONDOWN)
             {
+                if (e.button.button == SDL_BUTTON_LEFT)
+                {
+                    if (pick_target != NULL)
+                    {
+                        int type = pick_target->type;
+                        switch (type)
+                        {
+                            case TYPE_LAND:
+                                //printf("land (%d, %d)\n", pick_slots[id].land.x, pick_slots[id].land.y);
+                                break;
+                            case TYPE_STATIC:
+                                //printf("static\n");
+                                break;
+                            case TYPE_ITEM:
+                                printf("item %x\n", pick_target->item.item->id);
+                                net_send_use(pick_target->item.item->id);
+                                break;
+                            case TYPE_MOBILE:
+                                printf("mobile %x\n", pick_target->mobile.mobile->id);
+                                break;
+                            default:
+                                printf("unknown item picked :O\n");
+                                break;
+                        }
+                    }
+                }
                 if (e.button.button == SDL_BUTTON_RIGHT)
                 {
                     next_move = now;
@@ -1489,15 +1624,16 @@ int main()
         {
             uint8_t data[3];
             glReadPixels(mouse_x, inverted_mouse_y, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, &data);
-            int id0 = data[0];
-            int id1 = data[1];
-            int id2 = data[2];
-            int id = (id0 << 16) | (id1 << 8) | id2;
+            int pick_id0 = data[0];
+            int pick_id1 = data[1];
+            int pick_id2 = data[2];
+            int pick_id = (pick_id0 << 16) | (pick_id1 << 8) | pick_id2;
 
-            if (id >= 0 && id < sizeof(pick_slots)/sizeof(pick_slots[0]))
+            if (pick_id >= 0 && pick_id < sizeof(pick_slots)/sizeof(pick_slots[0]))
             {
+                pick_target = &pick_slots[pick_id];
                 //printf("picking id %d\n", id);
-                int type = pick_slots[id].type;
+                int type = pick_slots[pick_id].type;
                 switch (type)
                 {
                     case TYPE_LAND:
@@ -1507,15 +1643,19 @@ int main()
                         //printf("static\n");
                         break;
                     case TYPE_ITEM:
-                        printf("item %x\n", pick_slots[id].item.item->id);
+                        //printf("item %x\n", pick_slots[pick_id].item.item->id);
                         break;
                     case TYPE_MOBILE:
-                        printf("mobile %x\n", pick_slots[id].mobile.mobile->id);
+                        //printf("mobile %x\n", pick_slots[pick_id].mobile.mobile->id);
                         break;
                     default:
                         printf("unknown item picked :O\n");
                         break;
                 }
+            }
+            else
+            {
+                pick_target = NULL;
             }
         }
         

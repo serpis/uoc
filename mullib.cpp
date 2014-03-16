@@ -18,16 +18,17 @@
 
 
 // state of this module
-static ml_tile_data_entry *tile_datas = NULL;
-static int item_data_entry_count;
-static ml_item_data_entry *item_datas = NULL;
+static ml_tile_data_entry *tile_datas            = NULL;
+static int                 item_data_entry_count = 0;
+static ml_item_data_entry *item_datas            = NULL;
+static ml_hue             *hues                  = NULL;
 
-static ml_index *anim_idx    = NULL;
-static ml_index *art_idx     = NULL;
-static ml_index *statics0_blocks_idx = NULL;
-static ml_index *statics1_blocks_idx = NULL;
+static ml_index           *anim_idx              = NULL;
+static ml_index           *art_idx               = NULL;
+static ml_index           *statics0_blocks_idx   = NULL;
+static ml_index           *statics1_blocks_idx   = NULL;
+
 static bool ml_inited = false;
-
 static bool mlt_inited = false;
 
 
@@ -675,6 +676,39 @@ static void read_tiledata()
     file_unmap(p, end);
 }
 
+static void parse_hues(const char *p, const char *end)
+{
+    hues = (ml_hue *)malloc(sizeof(ml_hue)*8*375);
+    for (int i = 0; i < 8*375; i++)
+    {
+        // every eighth hue is prepended by an unknown header
+        if (i % 8 == 0)
+        {
+            read_uint32_le(&p, end);
+        }
+
+        ml_hue *hue = &hues[i];
+        for (int j = 0; j < 32; j++)
+        {
+            hue->colors[j] = read_uint16_le(&p, end);
+        }
+        hue->start_color = read_uint16_le(&p, end);
+        hue->end_color = read_uint16_le(&p, end);
+        read_ascii_fixed(&p, end, hue->name, 20);
+        //printf("%d: %s %04x %04x\n", i, name, start_color, end_color);
+    }
+}
+
+static void read_hues()
+{
+    const char *end;
+    const char *p = file_map("files/hues.mul", &end);
+
+    parse_hues(p, end);
+
+    file_unmap(p, end);
+}
+
 
 // see https://github.com/fdsprod/OpenUO/blob/master/OpenUO.Ultima.PresentationFramework/Adapters/AnimationImageSourceStorageAdapter.cs
 static int calc_anim_id(int anim_file, int body_id, int action, int direction)
@@ -732,6 +766,9 @@ void ml_init()
     printf("[ML]: Reading tiledata...\n");
     read_tiledata();
 
+    printf("[ML]: Reading hues...\n");
+    read_hues();
+
     printf("[ML]: Reading indexes...\n");
 
     index("files/anim.idx"   , &anim_idx);
@@ -778,6 +815,14 @@ ml_item_data_entry *ml_get_item_data(int item_id)
     assert(item_id >= 0 && item_id < item_data_entry_count);
 
     return &item_datas[item_id];
+}
+
+ml_hue *ml_get_hue(int hue_id)
+{
+    assert(ml_inited);
+    assert(hue_id >= 0 && hue_id < 8*375);
+
+    return &hues[hue_id];
 }
 
 static ml_anim *create_empty_animation()
