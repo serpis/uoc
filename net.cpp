@@ -1049,7 +1049,8 @@ void net_init()
     packet_lengths[0x20] = 19; // update mobile
     packet_lengths[0x21] = 8; // move reject
     packet_lengths[0x22] = 3; // move accept
-    packet_lengths[0x25] = 21; // container update
+    packet_lengths[0x24] = 7; // display container
+    packet_lengths[0x25] = 21; // update container
     packet_lengths[0x2c] = 2; // death status
     packet_lengths[0x2e] = 15; // equip update
     packet_lengths[0x3a] = 0; // skills
