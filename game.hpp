@@ -27,20 +27,33 @@ struct item_t
     int hue_id;
 };
 
-// gumps can be either just gumps or container (or something else?)
+// gumps can be plain gumps, containers, paperdolls (and some more?)
 // figure out a way to model this...
-struct container_t
+const int GUMPTYPE_CONTAINER = 0;
+const int GUMPTYPE_PAPERDOLL = 1;
+struct gump_t
 {
-    int gump_id;
-    int x, y;
-    int item_count;
-    struct
+    int type;
+    union
     {
-        uint32_t serial;
-        int x, y;
-        int item_id;
-        int hue_id;
-    } items[256];
+        struct
+        {
+            int gump_id;
+            int x, y;
+            int item_count;
+            struct
+            {
+                uint32_t serial;
+                int x, y;
+                int item_id;
+                int hue_id;
+            } items[256];
+        } container;
+        struct
+        {
+            mobile_t *mobile;
+        } paperdoll;
+    };
 };
 
 void game_set_player_info(uint32_t serial, int body_id, int x, int y, int z, int hue_id, int dir);
@@ -50,6 +63,7 @@ item_t *game_get_item(uint32_t serial);
 mobile_t *game_get_mobile(uint32_t serial);
 mobile_t *game_create_mobile(uint32_t serial);
 void game_delete_object(uint32_t serial);
-void game_display_container(uint32_t item_serial, int gump_id);
-container_t *game_get_container(uint32_t item_serial);
+void game_show_container(uint32_t item_serial, int gump_id);
+void game_show_paperdoll(mobile_t *m);
+gump_t *game_get_container(uint32_t item_serial);
 

@@ -398,8 +398,7 @@ static void land(int offset, int length, ml_art **art, bool rotate)
 
 static void parse_gump(const char *p, const char *end, int width, int height, ml_gump **g)
 {
-    //printf("gump %d %d\n", width, height);
-    int line_start_offsets[256];
+    int line_start_offsets[512];
     assert(height < sizeof(line_start_offsets)/sizeof(line_start_offsets[0]));
 
     const char *start = p;

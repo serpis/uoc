@@ -70,6 +70,14 @@ static pick_target_t pick_slots[0x10000];
 static bool picking_enabled = false;
 static int next_pick_id = 0;
 
+static int layer_draw_order[32] = 
+{
+     9, 20, 11, 16, 18,  4, 14,  3,
+     8, 24,  5, 13, 17, 10,  6, 19,
+     7, 22, 23, 12,  1,  2, 21, 15,
+     0, 25, 26, 27, 28, 29, 30, 31,
+};
+
 pick_target_t *pick_target = NULL;
 
 int pick_land(int x, int y)
@@ -135,7 +143,7 @@ int pick_gump()
 long now;
 
 std::map<int, item_t *> items;
-std::map<int, container_t *> containers;
+std::map<int, gump_t *> gumps;
 std::map<int, mobile_t *> mobiles;
 
 int draw_ceiling = 128;
@@ -663,7 +671,7 @@ pixel_storage_i *get_gump_ps(int gump_id)
         gump_cache.entries[gump_id].valid = true;
         gump_cache.entries[gump_id].fetching = true;
 
-        printf("gump_cache       : loading %d\n", gump_id);
+        //printf("gump_cache       : loading %d\n", gump_id);
 
         mlt_read_gump(gump_id, write_gump_ps);
     }
@@ -1130,7 +1138,7 @@ void draw_world_mobile(mobile_t *mobile, int pick_id)
     draw_world_anim(mobile->body_id, 0, mobile->dir, mobile->x, mobile->y, mobile->z, mobile->hue_id, pick_id);
     for (int i = 0; i < 32; i++)
     {
-        int layer = i;
+        int layer = layer_draw_order[i];
         int item_id = mobile->equipped_item_id[layer];
         int hue_id = mobile->equipped_hue_id[layer];
         if (item_id != 0)
@@ -1281,31 +1289,54 @@ void game_delete_object(uint32_t serial)
     }
 }
 
-void game_display_container(uint32_t item_serial, int gump_id)
+void game_show_container(uint32_t item_serial, int gump_id)
 {
-    std::map<int, container_t *>::iterator it = containers.find(item_serial);
-    if (it != containers.end())
+    std::map<int, gump_t *>::iterator it = gumps.find(item_serial);
+    if (it != gumps.end())
     {
-        container_t *container = it->second;
-        assert(container->gump_id == gump_id);
-        // TODO: remove all items in this container
+        gump_t *container = it->second;
+        assert(container->type == GUMPTYPE_CONTAINER && container->container.gump_id == gump_id);
+        // TODO: remove all items in this container ??
     }
     else
     {
-        container_t *container = (container_t *)malloc(sizeof(container_t));
-        memset(container, 0, sizeof(container_t));
-        container->gump_id = gump_id;
+        gump_t *container = (gump_t *)malloc(sizeof(gump_t));
+        memset(container, 0, sizeof(gump_t));
+        container->type = GUMPTYPE_CONTAINER;
+        container->container.gump_id = gump_id;
 
-        containers[item_serial] = container;
+        gumps[item_serial] = container;
     }
 }
 
-container_t *game_get_container(uint32_t item_serial)
+void game_show_paperdoll(mobile_t *m)
 {
-    std::map<int, container_t *>::iterator it = containers.find(item_serial);
-    assert(it != containers.end());
+    std::map<int, gump_t *>::iterator it = gumps.find(m->serial);
+    if (it != gumps.end())
+    {
+        gump_t *paperdoll = it->second;
+        assert(paperdoll->type == GUMPTYPE_PAPERDOLL);
+    }
+    else
+    {
+        gump_t *paperdoll = (gump_t *)malloc(sizeof(gump_t));
+        memset(paperdoll, 0, sizeof(gump_t));
+        paperdoll->type = GUMPTYPE_PAPERDOLL;
+        paperdoll->paperdoll.mobile = m;
 
-    return it->second;
+        gumps[m->serial] = paperdoll;
+    }
+}
+
+gump_t *game_get_container(uint32_t item_serial)
+{
+    std::map<int, gump_t *>::iterator it = gumps.find(item_serial);
+    assert(it != gumps.end());
+
+    gump_t *container = it->second;
+    assert(container->type == GUMPTYPE_CONTAINER);
+
+    return container;
 }
 
 int find_lowest_connected_roof(bool visited[64*64], int map, int start_x, int start_y, int x, int y)
@@ -1499,28 +1530,87 @@ void draw_world()
     }
 }
 
-void draw_gump(int gump_id, int x, int y, int pick_id)
+void draw_gump(int gump_id, int x, int y, int hue_id, int pick_id)
 {
     pixel_storage_i *ps = get_gump_ps(gump_id);
     // TODO: this null check shouldn't be necessary
     if (ps)
     {
-        blit_ps(ps, x, y, 0, 0, pick_id);
+        blit_ps(ps, x, y, 0, hue_id, pick_id);
     }
 }
 
-void draw_container(container_t *container)
+void draw_paperdoll(gump_t *gump)
 {
-    draw_gump(container->gump_id, container->x, container->y, pick_gump());
-    for (int i = 0; i < container->item_count; i++)
+// <body-id> <paperdoll-gump-id> <offset for this body> <fallback offset>
+//400 12  50000 50000 # male human
+//401 13  60000 50000 # female human
+//605 14  50000 50000 # male elf
+//606 15  60000 50000 # female elf
+//666 666 50000 50000 # male gargoyle
+//667 665 60000 50000 # female gargoyle
+    assert(gump->type == GUMPTYPE_PAPERDOLL);
+    mobile_t *m = gump->paperdoll.mobile;
+    int x = 0;
+    int y = 0;
+    int pick_id = pick_gump();
+
+    // frame
+    if (m == &player)
     {
-        uint32_t serial = container->items[i].serial;
+        draw_gump(2000, x, y, 0, pick_id);
+    }
+    else
+    {
+        draw_gump(2001, x, y, 0, pick_id);
+    }
+    // TODO: draw buttons
+
+    // body
+    draw_gump(12, x, y + 20, m->hue_id, pick_id);
+
+    // equipment
+    for (int i = 0; i < 32; i++)
+    {
+        int layer = layer_draw_order[i];
+        if (m->equipped_item_id[layer] != 0)
+        {
+            ml_item_data_entry *item_data = ml_get_item_data(m->equipped_item_id[layer]);
+            draw_gump(50000 + item_data->animation, x, y + 20, m->equipped_hue_id[layer], -1);
+        }
+    }
+}
+
+void draw_container(gump_t *container)
+{
+    assert(container->type == GUMPTYPE_CONTAINER);
+    draw_gump(container->container.gump_id, container->container.x, container->container.y, 0, pick_gump());
+    for (int i = 0; i < container->container.item_count; i++)
+    {
+        uint32_t serial = container->container.items[i].serial;
         item_t *item = game_get_item(serial);
-        int item_id = container->items[i].item_id;
-        int x = container->x + container->items[i].x;
-        int y = container->y + container->items[i].y;
-        int hue_id = container->items[i].hue_id;
+        int item_id = container->container.items[i].item_id;
+        int x = container->container.x + container->container.items[i].x;
+        int y = container->container.y + container->container.items[i].y;
+        int hue_id = container->container.items[i].hue_id;
         draw_screen_item(item_id, x, y, hue_id, pick_item(item));
+    }
+}
+
+void draw_gump(gump_t *gump)
+{
+    switch (gump->type)
+    {
+        case GUMPTYPE_CONTAINER:
+            draw_container(gump);
+            break;
+        case GUMPTYPE_PAPERDOLL:
+            draw_paperdoll(gump);
+            break;
+        default:
+            printf("unknown gump type: %d\n", gump->type);
+            assert(0 && "unknown gump type");
+            break;
     }
 }
 
@@ -1639,7 +1729,7 @@ int main()
                                 net_send_use(pick_target->mobile.mobile->serial);
                                 break;
                             case TYPE_GUMP:
-                                //printf("gump\n");
+                                printf("gump\n");
                                 break;
                             default:
                                 printf("unknown item picked :O\n");
@@ -1751,13 +1841,14 @@ int main()
         glClear(GL_DEPTH_BUFFER_BIT);
         // draw gumps
         {
-            std::map<int, container_t *>::iterator it;
-            for (it = containers.begin(); it != containers.end(); ++it)
+            std::map<int, gump_t *>::iterator it;
+            for (it = gumps.begin(); it != gumps.end(); ++it)
             {
-                container_t *container = it->second;
-                draw_container(container);
+                gump_t *gump = it->second;
+                draw_gump(gump);
             }
         }
+        //draw_paperdoll(&player, 0, 0, pick_gump());
         glDisable(GL_SCISSOR_TEST);
         glScissor(0, 0, window_width, window_height);
 
@@ -1822,13 +1913,15 @@ int main()
         glClear(GL_DEPTH_BUFFER_BIT);
         // draw gumps
         {
-            std::map<int, container_t *>::iterator it;
-            for (it = containers.begin(); it != containers.end(); ++it)
+            std::map<int, gump_t *>::iterator it;
+            for (it = gumps.begin(); it != gumps.end(); ++it)
             {
-                container_t *container = it->second;
-                draw_container(container);
+                gump_t *gump = it->second;
+                draw_gump(gump);
             }
         }
+
+        //draw_paperdoll(&player, 0, 0, pick_gump());
 
         //
         SDL_GL_SwapWindow(main_window);

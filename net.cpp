@@ -743,7 +743,7 @@ void net_poll()
                     uint32_t item_serial = read_uint32_be(&p, end);
                     int gump_id = read_uint16_be(&p, end);
 
-                    game_display_container(item_serial, gump_id);
+                    game_show_container(item_serial, gump_id);
 
                     break;
                 }
@@ -758,16 +758,16 @@ void net_poll()
                     uint32_t cont_serial = read_uint32_be(&p, end);
                     int hue_id = read_uint16_be(&p, end);
 
-                    container_t *container = game_get_container(cont_serial);
+                    gump_t *container = game_get_container(cont_serial);
                     // TODO: don't use magic constant here
-                    assert(container->item_count < 256);
+                    assert(container->container.item_count < 256);
                     // TODO: don't just add another item, instead modify the existing item, if any..
-                    container->items[container->item_count].serial = serial;
-                    container->items[container->item_count].x = x;
-                    container->items[container->item_count].y = y;
-                    container->items[container->item_count].item_id = item_id;
-                    container->items[container->item_count].hue_id = hue_id;
-                    container->item_count += 1;
+                    container->container.items[container->container.item_count].serial = serial;
+                    container->container.items[container->container.item_count].x = x;
+                    container->container.items[container->container.item_count].y = y;
+                    container->container.items[container->container.item_count].item_id = item_id;
+                    container->container.items[container->container.item_count].hue_id = hue_id;
+                    container->container.item_count += 1;
 
                     printf("adding item to container: %08x\n", serial);
 
@@ -802,15 +802,15 @@ void net_poll()
                         uint32_t cont_serial = read_uint32_be(&p, end);
                         int hue_id = read_uint16_be(&p, end);
 
-                        container_t *container = game_get_container(cont_serial);
+                        gump_t *container = game_get_container(cont_serial);
                         // TODO: don't use magic constant here
-                        assert(container->item_count < 256);
-                        container->items[container->item_count].serial = serial;
-                        container->items[container->item_count].x = x;
-                        container->items[container->item_count].y = y;
-                        container->items[container->item_count].item_id = item_id;
-                        container->items[container->item_count].hue_id = hue_id;
-                        container->item_count += 1;
+                        assert(container->container.item_count < 256);
+                        container->container.items[container->container.item_count].serial = serial;
+                        container->container.items[container->container.item_count].x = x;
+                        container->container.items[container->container.item_count].y = y;
+                        container->container.items[container->container.item_count].item_id = item_id;
+                        container->container.items[container->container.item_count].hue_id = hue_id;
+                        container->container.item_count += 1;
 
                         printf("adding item to container: %08x\n", serial);
                     }
@@ -870,6 +870,17 @@ void net_poll()
                     // login denied...
                     uint8_t reason = read_uint8(&p, end);
                     printf("login denied. reason: %d\n", reason);
+                    break;
+                }
+                case 0x88: {
+                    uint32_t serial = read_uint32_be(&p, end);
+                    char full_name[61];
+                    read_ascii_fixed(&p, end, full_name, 60);
+                    int flags = read_uint8(&p, end);
+
+                    mobile_t *m = game_get_mobile(serial);
+                    game_show_paperdoll(m);
+
                     break;
                 }
                 case 0x8c: {
