@@ -530,8 +530,10 @@ static void parse_statics_block(const char *p, const char *end, ml_statics_block
         if (item_data->flags & 0x10000000)
         {
             // is roof!
-            assert((*sb)->roof_heights[dx+dy*8] == -1);
-            (*sb)->roof_heights[dx+dy*8] = z;
+            if ((*sb)->roof_heights[dx+dy*8] == -1 || z > (*sb)->roof_heights[dx+dy*8]) // higher than existing roof?
+            {
+                (*sb)->roof_heights[dx+dy*8] = z;
+            }
         }
 
         //printf("%d %d %d %d\n", tile_id, dx, dy, z);
