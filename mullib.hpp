@@ -27,6 +27,12 @@ struct ml_hue
     char name[21];
 };
 
+struct ml_cliloc_entry
+{
+    int id;
+    const char *s;
+};
+
 struct ml_index
 {
     int entry_count;
@@ -89,6 +95,7 @@ void ml_init();
 ml_tile_data_entry *ml_get_tile_data(int tile_id);
 ml_item_data_entry *ml_get_item_data(int item_id);
 ml_hue             *ml_get_hue(int hue_id);
+const char         *ml_get_cliloc(int cliloc_id);
 
 // it is the caller's responsibility to free the memory returned from these
 ml_anim *ml_read_anim(int body_id, int action, int direction);

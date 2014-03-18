@@ -23,6 +23,9 @@ static int                 item_data_entry_count = 0;
 static ml_item_data_entry *item_datas            = NULL;
 static ml_hue             *hues                  = NULL;
 
+static int                 cliloc_entry_count    = 0;
+static ml_cliloc_entry    *cliloc_entries        = NULL;
+
 static ml_index           *anim_idx              = NULL;
 static ml_index           *art_idx               = NULL;
 static ml_index           *gump_idx              = NULL;
@@ -773,6 +776,100 @@ static void read_hues()
     file_unmap(p, end);
 }
 
+static void parse_cliloc(const char *p, const char *end)
+{
+    int a = read_uint32_le(&p, end);
+    int b = read_uint16_le(&p, end);
+
+    const char *start = p;
+
+    // first go through it one pass to count the number of strings and total string size
+    int string_count = 0;
+    int total_string_size = 0;
+    while(p < end)
+    {
+        read_uint32_le(&p, end);
+        read_uint8(&p, end);
+        int length = read_uint16_le(&p, end);
+        p += length;
+        if (length > 0)
+        {
+            string_count += 1;
+            total_string_size += length + 1; // include null terminator
+        }
+    }
+
+    // rewind
+    p = start;
+
+    cliloc_entry_count = string_count;
+    cliloc_entries = (ml_cliloc_entry *)malloc(sizeof(ml_cliloc_entry) * string_count);
+
+    int next_index = 0;
+    while(p < end)
+    {
+        int id = read_sint32_le(&p, end);
+        read_uint8(&p, end);
+
+        int length = read_uint16_le(&p, end);
+        if (length > 0)
+        {
+            ml_cliloc_entry *entry = &cliloc_entries[next_index];
+            entry->id = id;
+            char *s = (char *)malloc(length+1);
+            s[length-1] = '\0';
+            read_ascii_fixed(&p, end, s, length);
+            entry->s = s;
+            next_index += 1;
+        }
+    }
+
+    for (int i = 0; i < string_count; i++)
+    {
+        ml_cliloc_entry *entry = &cliloc_entries[i];
+        //printf("%d, %d: %s\n", i, entry->id, entry->s);
+    }
+}
+
+const char *ml_get_cliloc(int cliloc_id)
+{
+    int begin = 0;
+    int end = cliloc_entry_count;
+
+    int iterations = 1;
+    while (begin < end)
+    {
+        int mid = begin + (end - begin) / 2;
+        //printf("(?%d) %d %d %d\n", id, cliloc_entries[begin].id, cliloc_entries[mid].id, cliloc_entries[end].id);
+        ml_cliloc_entry *entry = &cliloc_entries[mid];
+        if (entry->id == cliloc_id)
+        {
+            return entry->s;
+        }
+        else if (entry->id < cliloc_id)
+        {
+            begin = mid;
+        }
+        else
+        {
+            end = mid;
+        }
+        iterations += 1;
+    }
+
+    assert(0 && "cliloc id not found");
+}
+
+static void read_cliloc()
+{
+    const char *end;
+    const char *p = file_map("files/Cliloc.enu", &end);
+
+    parse_cliloc(p, end);
+
+    file_unmap(p, end);
+}
+
 
 // see https://github.com/fdsprod/OpenUO/blob/master/OpenUO.Ultima.PresentationFramework/Adapters/AnimationImageSourceStorageAdapter.cs
 static int calc_anim_id(int anim_file, int body_id, int action, int direction)
@@ -832,6 +929,15 @@ void ml_init()
 
     printf("[ML]: Reading hues...\n");
     read_hues();
+
+    printf("[ML]: Reading cliloc...\n");
+    read_cliloc();
+    // verify that all clilocs are findable
+    /*for (int i = 0; i < cliloc_entry_count; i++)
+    {
+        ml_cliloc_entry *entry = &cliloc_entries[i];
+        assert(strcmp(entry->s, ml_get_cliloc(entry->id)) == 0);
+    }*/
 
     printf("[ML]: Reading indexes...\n");
 

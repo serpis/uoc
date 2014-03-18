@@ -16,6 +16,7 @@
 
 #include "serialize.hpp"
 #include "game.hpp"
+#include "mullib.hpp" // only for ml_get_cliloc... move to game?
 
 bool enable_compression = false;
 
@@ -1058,6 +1059,22 @@ void net_poll()
                         default:
                             printf("ignoring 0xbf subcommand %02x\n", cmd);
                     }
+                    break;
+                }
+                case 0xc1: {
+                    uint32_t speaker_serial = read_uint32_be(&p, end);
+                    read_uint16_le(&p, end);
+                    int type = read_uint8(&p, end);
+                    int hue_id = read_uint16_be(&p, end);
+                    int font_id = read_uint16_be(&p, end);
+                    int cliloc_id = read_uint32_be(&p, end);
+                    char speaker[31];
+                    speaker[31] = '\0';
+                    read_ascii_fixed(&p, end, speaker, 30);
+                    // TODO: read arguments
+
+                    printf("%s: %s\n", speaker, ml_get_cliloc(cliloc_id));
+
                     break;
                 }
                 case 0xf3: {
