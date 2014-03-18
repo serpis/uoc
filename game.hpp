@@ -9,8 +9,7 @@ struct mobile_t
     int dir;
     int hue_id;
     int noto;
-    int equipped_item_id[32];
-    int equipped_hue_id[32];
+    struct item_t *equipped_items[32];
 };
 
 // items can live in several places:
@@ -19,12 +18,28 @@ struct mobile_t
 // on the ground
 // being dragged by player
 // they need to be deleted properly regardless of which of these places they are
+
+const int SPACETYPE_WORLD = 0;
+const int SPACETYPE_CONTAINER = 1;
+const int SPACETYPE_EQUIPPED = 2;
+const int SPACETYPE_DRAG = 3;
 struct item_t
 {
     uint32_t serial;
     int item_id;
-    int x, y, z;
     int hue_id;
+    int space;
+    union
+    {
+        struct
+        {
+            int x, y, z;
+        } world;
+        struct
+        {
+            int x, y;
+        } container;
+    } loc;
 };
 
 // gumps can be plain gumps, containers, paperdolls (and some more?)
@@ -41,13 +56,7 @@ struct gump_t
             int gump_id;
             int x, y;
             int item_count;
-            struct
-            {
-                uint32_t serial;
-                int x, y;
-                int item_id;
-                int hue_id;
-            } items[256];
+            item_t *items[256];
         } container;
         struct
         {

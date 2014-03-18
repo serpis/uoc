@@ -667,9 +667,10 @@ void net_poll()
 
                     item_t *item = game_get_item(serial);
                     item->item_id = item_id;
-                    item->x = x;
-                    item->y = y;
-                    item->z = z;
+                    item->space = SPACETYPE_WORLD;
+                    item->loc.world.x = x;
+                    item->loc.world.y = y;
+                    item->loc.world.z = z;
                     item->hue_id = hue_id;
 
                     //printf("0x1a: hue_id = %04x\n", hue_id);
@@ -759,14 +760,20 @@ void net_poll()
                     int hue_id = read_uint16_be(&p, end);
 
                     gump_t *container = game_get_container(cont_serial);
+
                     // TODO: don't use magic constant here
                     assert(container->container.item_count < 256);
-                    // TODO: don't just add another item, instead modify the existing item, if any..
-                    container->container.items[container->container.item_count].serial = serial;
-                    container->container.items[container->container.item_count].x = x;
-                    container->container.items[container->container.item_count].y = y;
-                    container->container.items[container->container.item_count].item_id = item_id;
-                    container->container.items[container->container.item_count].hue_id = hue_id;
+                    
+                    item_t *item = game_get_item(serial);
+                    // item_id == 0 means just inited
+                    assert(item_id == 0 || item->space == SPACETYPE_CONTAINER);
+                    item->space = SPACETYPE_CONTAINER;
+                    item->loc.container.x = x;
+                    item->loc.container.y = y;
+                    item->item_id = item_id;
+                    item->hue_id = hue_id;
+
+                    container->container.items[container->container.item_count] = item;
                     container->container.item_count += 1;
 
                     printf("adding item to container: %08x\n", serial);
@@ -805,11 +812,18 @@ void net_poll()
                         gump_t *container = game_get_container(cont_serial);
                         // TODO: don't use magic constant here
                         assert(container->container.item_count < 256);
-                        container->container.items[container->container.item_count].serial = serial;
-                        container->container.items[container->container.item_count].x = x;
-                        container->container.items[container->container.item_count].y = y;
-                        container->container.items[container->container.item_count].item_id = item_id;
-                        container->container.items[container->container.item_count].hue_id = hue_id;
+
+                        item_t *item = game_get_item(serial);
+                        // item_id == 0 means just inited
+                        //printf("item_id: %d\n", item_id);
+                        //assert(item_id == 0 || item->space == SPACETYPE_CONTAINER);
+                        item->space = SPACETYPE_CONTAINER;
+                        item->loc.container.x = x;
+                        item->loc.container.y = y;
+                        item->item_id = item_id;
+                        item->hue_id = hue_id;
+
+                        container->container.items[container->container.item_count] = item;
                         container->container.item_count += 1;
 
                         printf("adding item to container: %08x\n", serial);
@@ -1066,9 +1080,10 @@ void net_poll()
                     {
                         item_t *item = game_get_item(serial);
                         item->item_id = item_id;
-                        item->x = x;
-                        item->y = y;
-                        item->z = z;
+                        item->space = SPACETYPE_WORLD;
+                        item->loc.world.x = x;
+                        item->loc.world.y = y;
+                        item->loc.world.z = z;
                         item->hue_id = hue_id;
                     }
                     else

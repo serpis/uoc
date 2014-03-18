@@ -1139,10 +1139,11 @@ void draw_world_mobile(mobile_t *mobile, int pick_id)
     for (int i = 0; i < 32; i++)
     {
         int layer = layer_draw_order[i];
-        int item_id = mobile->equipped_item_id[layer];
-        int hue_id = mobile->equipped_hue_id[layer];
-        if (item_id != 0)
+        item_t *item = mobile->equipped_items[layer];
+        if (item != NULL)
         {
+            int item_id = item->item_id;
+            int hue_id = item->hue_id;
             ml_item_data_entry *item_data = ml_get_item_data(item_id);
             if (item_data->animation != 0)
             {
@@ -1201,10 +1202,14 @@ void game_set_player_pos(int x, int y, int z, int dir)
 
 void game_equip(mobile_t *m, uint32_t serial, int item_id, int layer, int hue_id)
 {
-    // TODO: track item..
+    item_t *item = game_get_item(serial);
+    item->item_id = item_id;
+    item->hue_id = hue_id;
+    item->space = SPACETYPE_EQUIPPED;
+
     assert(layer >= 0 && layer < 32);
-    m->equipped_item_id[layer] = item_id;
-    m->equipped_hue_id[layer] = hue_id;
+    assert(m->equipped_items[layer] == NULL || m->equipped_items[layer] == item);
+    m->equipped_items[layer] = item;
 }
 
 item_t *game_get_item(uint32_t serial)
@@ -1513,7 +1518,10 @@ void draw_world()
         for (it = items.begin(); it != items.end(); ++it)
         {
             item_t *item = it->second;
-            draw_world_item(item->item_id, item->x, item->y, item->z, item->hue_id, pick_item(item));
+            if (item->space == SPACETYPE_WORLD)
+            {
+                draw_world_item(item->item_id, item->loc.world.x, item->loc.world.y, item->loc.world.z, item->hue_id, pick_item(item));
+            }
         }
     }
     // draw mobiles
@@ -1573,10 +1581,12 @@ void draw_paperdoll(gump_t *gump)
     for (int i = 0; i < 32; i++)
     {
         int layer = layer_draw_order[i];
-        if (m->equipped_item_id[layer] != 0)
+        if (m->equipped_items[layer] != 0)
         {
-            ml_item_data_entry *item_data = ml_get_item_data(m->equipped_item_id[layer]);
-            draw_gump(50000 + item_data->animation, x, y + 20, m->equipped_hue_id[layer], -1);
+            item_t *item = m->equipped_items[layer];
+            assert(item->space == SPACETYPE_EQUIPPED);
+            ml_item_data_entry *item_data = ml_get_item_data(item->item_id);
+            draw_gump(50000 + item_data->animation, x, y + 20, item->hue_id, -1);
         }
     }
 }
@@ -1587,12 +1597,15 @@ void draw_container(gump_t *container)
     draw_gump(container->container.gump_id, container->container.x, container->container.y, 0, pick_gump());
     for (int i = 0; i < container->container.item_count; i++)
     {
-        uint32_t serial = container->container.items[i].serial;
-        item_t *item = game_get_item(serial);
-        int item_id = container->container.items[i].item_id;
-        int x = container->container.x + container->container.items[i].x;
-        int y = container->container.y + container->container.items[i].y;
-        int hue_id = container->container.items[i].hue_id;
+        item_t *item = container->container.items[i];
+
+        assert(item->space == SPACETYPE_CONTAINER);
+
+        int item_id = item->item_id;
+        int hue_id = item->hue_id;
+        int x = item->loc.container.x;
+        int y = item->loc.container.y;
+
         draw_screen_item(item_id, x, y, hue_id, pick_item(item));
     }
 }
