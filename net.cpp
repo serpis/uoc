@@ -1150,6 +1150,7 @@ void net_init()
     packet_lengths[0x55] = 1; // login complete
     packet_lengths[0x5b] = 4; // server time
     packet_lengths[0x65] = 4; // weather change
+    packet_lengths[0x66] = 0; // book content changed
     packet_lengths[0x6d] = 3; // play music
     packet_lengths[0x6e] = 14; // character animation
     packet_lengths[0x72] = 5; // set war mode
@@ -1174,6 +1175,7 @@ void net_init()
     packet_lengths[0xbf] = 0; // extended command
     packet_lengths[0xc0] = 36; // hued effect
     packet_lengths[0xc1] = 0; // cliloc message
+    packet_lengths[0xd4] = 0; // book header
     packet_lengths[0xdc] = 9; // item revision
     packet_lengths[0xdd] = 0; // display gump packed
     packet_lengths[0xdf] = 0; // "buff/debuff system" <- what is this?
