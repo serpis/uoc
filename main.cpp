@@ -1586,7 +1586,7 @@ void draw_paperdoll(gump_t *gump)
             item_t *item = m->equipped_items[layer];
             assert(item->space == SPACETYPE_EQUIPPED);
             ml_item_data_entry *item_data = ml_get_item_data(item->item_id);
-            draw_gump(50000 + item_data->animation, x, y + 20, item->hue_id, -1);
+            draw_gump(50000 + item_data->animation, x, y + 20, item->hue_id, pick_item(item));
         }
     }
 }
