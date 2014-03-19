@@ -80,8 +80,6 @@ static int layer_draw_order[32] =
      0, 25, 26, 27, 28, 29, 30, 31,
 };
 
-pick_target_t *pick_target = NULL;
-
 int pick_land(int x, int y)
 {
     if (!picking_enabled)
@@ -1720,6 +1718,128 @@ int main()
         }
         frames += 1;
 
+        // resource load handling
+        mlt_process_callbacks();
+
+        // draw distinct background
+        glClearColor(1.0, 0.0, 1.0, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glColor4f(1.0f, 1.0f, 0.0f, 1.0f);
+        glBegin(GL_TRIANGLES);
+        glVertex2f(-1.0f, -1.0f);
+        glVertex2f( 1.0f, -1.0f);
+        glVertex2f( 0.0f,  1.0f);
+        glEnd();
+
+        int world_center_block_x = player.x / 8;
+        int world_center_block_y = player.y / 8;
+
+        // because GL counts y starting from bottom of screen
+        int inverted_mouse_y = window_height-mouse_y-1;
+
+        draw_ceiling = find_ceiling(1, player.x, player.y, player.z);
+        draw_roofs = true;
+        if (has_roof(1, player.x, player.y))
+        {
+            draw_roofs = false;
+        }
+
+        // reset pick ids
+        next_pick_id = 0;
+        picking_enabled = true;
+        glScissor(mouse_x, inverted_mouse_y, 1, 1);
+        glEnable(GL_SCISSOR_TEST);
+        draw_world();
+        glClear(GL_DEPTH_BUFFER_BIT);
+        // draw gumps
+        {
+            std::map<int, gump_t *>::iterator it;
+            for (it = gumps.begin(); it != gumps.end(); ++it)
+            {
+                gump_t *gump = it->second;
+                draw_gump(gump);
+            }
+        }
+        //draw_paperdoll(&player, 0, 0, pick_gump());
+        glDisable(GL_SCISSOR_TEST);
+        glScissor(0, 0, window_width, window_height);
+
+        // do picking
+        pick_target_t *pick_target = NULL;
+        {
+            uint8_t data[3];
+            glReadPixels(mouse_x, inverted_mouse_y, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, &data);
+            int pick_id0 = data[0];
+            int pick_id1 = data[1];
+            int pick_id2 = data[2];
+            int pick_id = (pick_id0 << 16) | (pick_id1 << 8) | pick_id2;
+
+            if (pick_id >= 0 && pick_id < sizeof(pick_slots)/sizeof(pick_slots[0]))
+            {
+                pick_target = &pick_slots[pick_id];
+                //printf("picking id %d\n", id);
+                int type = pick_slots[pick_id].type;
+                switch (type)
+                {
+                    case TYPE_LAND:
+                        //printf("land (%d, %d)\n", pick_slots[id].land.x, pick_slots[id].land.y);
+                        break;
+                    case TYPE_STATIC:
+                        //printf("static\n");
+                        break;
+                    case TYPE_ITEM:
+                        //printf("item %x\n", pick_slots[pick_id].item.item->serial);
+                        break;
+                    case TYPE_MOBILE:
+                        //printf("mobile %x\n", pick_slots[pick_id].mobile.mobile->serial);
+                        break;
+                    case TYPE_GUMP:
+                        //printf("gump\n");
+                        break;
+                    default:
+                        printf("unknown item picked :O\n");
+                        break;
+                }
+            }
+            else
+            {
+                pick_target = NULL;
+            }
+        }
+        
+
+
+        // draw distinct background
+        glClearColor(1.0, 0.0, 1.0, 1.0);
+        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+        glColor4f(1.0f, 1.0f, 0.0f, 1.0f);
+        glBegin(GL_TRIANGLES);
+        glVertex2f(-1.0f, -1.0f);
+        glVertex2f( 1.0f, -1.0f);
+        glVertex2f( 0.0f,  1.0f);
+        glEnd();
+
+
+        picking_enabled = false;
+        draw_world();
+
+        glClear(GL_DEPTH_BUFFER_BIT);
+        // draw gumps
+        {
+            std::map<int, gump_t *>::iterator it;
+            for (it = gumps.begin(); it != gumps.end(); ++it)
+            {
+                gump_t *gump = it->second;
+                draw_gump(gump);
+            }
+        }
+
+        //draw_paperdoll(&player, 0, 0, pick_gump());
+
+
+
+        // the rest of the logic is done after drawing, so that it can make use of the picking done in drawing stage
+
         // event polling
         SDL_Event e;
         while (SDL_PollEvent(&e))
@@ -1849,123 +1969,6 @@ int main()
 
         // network...
         net_poll();
-
-        // resource load handling
-        mlt_process_callbacks();
-
-        // draw distinct background
-        glClearColor(1.0, 0.0, 1.0, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glColor4f(1.0f, 1.0f, 0.0f, 1.0f);
-        glBegin(GL_TRIANGLES);
-        glVertex2f(-1.0f, -1.0f);
-        glVertex2f( 1.0f, -1.0f);
-        glVertex2f( 0.0f,  1.0f);
-        glEnd();
-
-        int world_center_block_x = player.x / 8;
-        int world_center_block_y = player.y / 8;
-
-        // because GL counts y starting from bottom of screen
-        int inverted_mouse_y = window_height-mouse_y-1;
-
-        draw_ceiling = find_ceiling(1, player.x, player.y, player.z);
-        draw_roofs = true;
-        if (has_roof(1, player.x, player.y))
-        {
-            draw_roofs = false;
-        }
-
-        // reset pick ids
-        next_pick_id = 0;
-        picking_enabled = true;
-        glScissor(mouse_x, inverted_mouse_y, 1, 1);
-        glEnable(GL_SCISSOR_TEST);
-        draw_world();
-        glClear(GL_DEPTH_BUFFER_BIT);
-        // draw gumps
-        {
-            std::map<int, gump_t *>::iterator it;
-            for (it = gumps.begin(); it != gumps.end(); ++it)
-            {
-                gump_t *gump = it->second;
-                draw_gump(gump);
-            }
-        }
-        //draw_paperdoll(&player, 0, 0, pick_gump());
-        glDisable(GL_SCISSOR_TEST);
-        glScissor(0, 0, window_width, window_height);
-
-        // do picking
-        {
-            uint8_t data[3];
-            glReadPixels(mouse_x, inverted_mouse_y, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, &data);
-            int pick_id0 = data[0];
-            int pick_id1 = data[1];
-            int pick_id2 = data[2];
-            int pick_id = (pick_id0 << 16) | (pick_id1 << 8) | pick_id2;
-
-            if (pick_id >= 0 && pick_id < sizeof(pick_slots)/sizeof(pick_slots[0]))
-            {
-                pick_target = &pick_slots[pick_id];
-                //printf("picking id %d\n", id);
-                int type = pick_slots[pick_id].type;
-                switch (type)
-                {
-                    case TYPE_LAND:
-                        //printf("land (%d, %d)\n", pick_slots[id].land.x, pick_slots[id].land.y);
-                        break;
-                    case TYPE_STATIC:
-                        //printf("static\n");
-                        break;
-                    case TYPE_ITEM:
-                        //printf("item %x\n", pick_slots[pick_id].item.item->serial);
-                        break;
-                    case TYPE_MOBILE:
-                        //printf("mobile %x\n", pick_slots[pick_id].mobile.mobile->serial);
-                        break;
-                    case TYPE_GUMP:
-                        //printf("gump\n");
-                        break;
-                    default:
-                        printf("unknown item picked :O\n");
-                        break;
-                }
-            }
-            else
-            {
-                pick_target = NULL;
-            }
-        }
-        
-
-
-        // draw distinct background
-        glClearColor(1.0, 0.0, 1.0, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glColor4f(1.0f, 1.0f, 0.0f, 1.0f);
-        glBegin(GL_TRIANGLES);
-        glVertex2f(-1.0f, -1.0f);
-        glVertex2f( 1.0f, -1.0f);
-        glVertex2f( 0.0f,  1.0f);
-        glEnd();
-
-
-        picking_enabled = false;
-        draw_world();
-
-        glClear(GL_DEPTH_BUFFER_BIT);
-        // draw gumps
-        {
-            std::map<int, gump_t *>::iterator it;
-            for (it = gumps.begin(); it != gumps.end(); ++it)
-            {
-                gump_t *gump = it->second;
-                draw_gump(gump);
-            }
-        }
-
-        //draw_paperdoll(&player, 0, 0, pick_gump());
 
         //
         SDL_GL_SwapWindow(main_window);
