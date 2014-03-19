@@ -922,7 +922,10 @@ mobile_t player =
     0, // dir
     0, // hue
     0, // noto
-    {0} // equipped items
+    {0}, // equipped items
+    0, // last_dir
+    0, // last_movement
+    4, // action_id
 };
 
 // Lord British' throne
@@ -1135,7 +1138,15 @@ void draw_world_anim(int body_id, int action, int direction, int x, int y, int z
 
 void draw_world_mobile(mobile_t *mobile, int pick_id)
 {
-    draw_world_anim(mobile->body_id, 0, mobile->dir, mobile->x, mobile->y, mobile->z, mobile->hue_id, pick_id);
+    int action_id = mobile->action_id;
+
+    // mobiles' walk animation override current animation
+    if (now - mobile->last_movement <= 500)
+    {
+        action_id = 0;
+    }
+
+    draw_world_anim(mobile->body_id, action_id, mobile->dir, mobile->x, mobile->y, mobile->z, mobile->hue_id, pick_id);
     for (int i = 0; i < 32; i++)
     {
         int layer = layer_draw_order[i];
@@ -1148,7 +1159,7 @@ void draw_world_mobile(mobile_t *mobile, int pick_id)
             if (item_data->animation != 0)
             {
                 //printf("drawing anim for item_id %d (%s)\n", item_id, item_data->name);
-                draw_world_anim(item_data->animation, 0, mobile->dir, mobile->x, mobile->y, mobile->z, hue_id, pick_id);
+                draw_world_anim(item_data->animation, action_id, mobile->dir, mobile->x, mobile->y, mobile->z, hue_id, pick_id);
             }
         }
     }
@@ -1264,6 +1275,7 @@ mobile_t *game_create_mobile(uint32_t serial)
     mobile_t *m = (mobile_t *)malloc(sizeof(mobile_t));
     memset(m, 0, sizeof(*m));
     m->serial = serial;
+    m->action_id = 4; // stand
     mobiles[serial] = m;
     return m;
 }
@@ -1809,9 +1821,12 @@ int main()
             }
             else
             {
+                player.last_dir = player.dir;
                 player.dir = move_dir;
             }
             net_send_move(player.dir);
+
+            player.last_movement = next_move;
 
             next_move += 100;
         }

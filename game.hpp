@@ -10,6 +10,11 @@ struct mobile_t
     int hue_id;
     int noto;
     struct item_t *equipped_items[32];
+
+    // animation related stuff
+    int last_dir;
+    long last_movement;
+    int action_id;
 };
 
 // items can live in several places:

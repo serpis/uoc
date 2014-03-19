@@ -831,6 +831,21 @@ void net_poll()
                     }
                     break;
                 }
+                case 0x6e: {
+                    uint32_t mob_id = read_uint32_be(&p, end);
+                    int action_id = read_uint16_be(&p, end);
+                    read_uint8(&p, end);
+                    int frame_count = read_uint8(&p, end);
+                    int repeat = read_uint16_be(&p, end);
+                    int backwards = read_uint8(&p, end);
+                    int repeat_flag_what_is_this = read_uint8(&p, end);
+                    int frame_delay = read_uint8(&p, end);
+
+                    mobile_t *m = game_get_mobile(mob_id);
+                    m->action_id = action_id;
+
+                    printf("%8x, do action %d\n", mob_id, action_id);
+                }
                 case 0x77: {
                     uint32_t mob_id = read_uint32_be(&p, end);
                     mobile_t *m = game_get_mobile(mob_id);
