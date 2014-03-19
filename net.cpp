@@ -225,8 +225,22 @@ void send_client_version_response(const char *v)
     send_packet(data, data + 3+len+1);
 }
 
-int sequence = 0;
 
+static int ping_sequence = 0;
+void net_send_ping()
+{
+    char data[2];
+    char *p = data;
+    char *end = p + sizeof(data);
+    write_uint8(&p, end, 0x73);
+    write_uint8(&p, end, ping_sequence);
+    ping_sequence += 1;
+    ping_sequence %= 256;
+    assert(p == end);
+    send_packet(data, end);
+}
+
+static int move_sequence = 0;
 void net_send_move(int dir)
 {
     char data[7];
@@ -234,8 +248,9 @@ void net_send_move(int dir)
     char *end = p + sizeof(data);
     write_uint8(&p, end, 0x02);
     write_uint8(&p, end, dir);
-    write_uint8(&p, end, sequence);
-    sequence += 1;
+    write_uint8(&p, end, move_sequence);
+    move_sequence += 1;
+    move_sequence %= 256;
     write_uint32_be(&p, end, 0);
     assert(p == end);
     send_packet(data, end);
@@ -728,7 +743,7 @@ void net_poll()
                     int z = read_sint8(&p, end);
 
                     // reset movement sequence
-                    sequence = 0;
+                    move_sequence = 0;
 
                     //printf("move reject seq %d\n", seq);
                     game_set_player_pos(x, y, z, dir);
@@ -845,6 +860,11 @@ void net_poll()
                     m->action_id = action_id;
 
                     printf("%8x, do action %d\n", mob_id, action_id);
+                    break;
+                }
+                case 0x73: {
+                    // ping response... nothing to do.
+                    break;
                 }
                 case 0x77: {
                     uint32_t mob_id = read_uint32_be(&p, end);
@@ -1186,6 +1206,7 @@ void net_init()
     packet_lengths[0x6d] = 3; // play music
     packet_lengths[0x6e] = 14; // character animation
     packet_lengths[0x72] = 5; // set war mode
+    packet_lengths[0x73] = 2; // ping response
     packet_lengths[0x77] = 17; // move mobile
     packet_lengths[0x78] = 0; // incoming mobile
     packet_lengths[0x82] = 2; // login denied

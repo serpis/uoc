@@ -32,6 +32,8 @@
 
 #endif
 
+const int ping_frequency = 30000;
+
 const int TYPE_LAND      = 0;
 const int TYPE_STATIC    = 1;
 const int TYPE_ITEM      = 2;
@@ -1686,6 +1688,7 @@ int main()
     // 1 = vsync
     SDL_GL_SetSwapInterval(1);
 
+    long next_ping = ping_frequency;
     long next_move = -1;
     int move_dx;
     int move_dy;
@@ -1764,7 +1767,14 @@ int main()
                 }
                 if (e.button.button == SDL_BUTTON_RIGHT)
                 {
-                    next_move = now;
+                    if (pick_target != NULL && pick_target->type == TYPE_GUMP)
+                    {
+                        //game_
+                    }
+                    else
+                    {
+                        next_move = now;
+                    }
                 }
             }
             if (e.type == SDL_MOUSEBUTTONUP)
@@ -1829,6 +1839,12 @@ int main()
             player.last_movement = next_move;
 
             next_move += 100;
+        }
+
+        if (now >= next_ping)
+        {
+            net_send_ping();
+            next_ping += ping_frequency;
         }
 
         // network...
