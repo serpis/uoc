@@ -775,7 +775,10 @@ void net_poll()
                     uint32_t cont_serial = read_uint32_be(&p, end);
                     int hue_id = read_uint16_be(&p, end);
 
-                    gump_t *container = game_get_container(cont_serial);
+                    item_t *parent_item = game_get_item(cont_serial);
+                    assert(parent_item->container_gump != NULL);
+
+                    gump_t *container = parent_item->container_gump;;
 
                     // TODO: don't use magic constant here
                     assert(container->container.item_count < 256);

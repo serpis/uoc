@@ -9,6 +9,7 @@ struct mobile_t
     int dir;
     int hue_id;
     int noto;
+    struct gump_t *paperdoll_gump;
     struct item_t *equipped_items[32];
 
     // animation related stuff
@@ -33,6 +34,8 @@ struct item_t
     uint32_t serial;
     int item_id;
     int hue_id;
+    // items that are containers may have an open gump
+    struct gump_t *container_gump;
     int space;
     union
     {
@@ -54,12 +57,13 @@ const int GUMPTYPE_PAPERDOLL = 1;
 struct gump_t
 {
     int type;
+    int serial;
+    int x, y;
     union
     {
         struct
         {
             int gump_id;
-            int x, y;
             int item_count;
             item_t *items[256];
         } container;
