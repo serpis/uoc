@@ -870,10 +870,18 @@ void net_poll()
                     int repeat_flag_what_is_this = read_uint8(&p, end);
                     int frame_delay = read_uint8(&p, end);
 
-                    mobile_t *m = game_get_mobile(mob_id);
-                    m->action_id = action_id;
+                    if (action_id >= 35)
+                    {
+                        printf("ignoring animation with action_id %d (because it is >= 35, don't know how to handle)\n", action_id);
+                    }
+                    else
+                    {
+                        mobile_t *m = game_get_mobile(mob_id);
+                        m->action_id = action_id;
 
-                    printf("%8x, do action %d\n", mob_id, action_id);
+
+                        printf("%8x (body: %d), do action %d\n", mob_id, m->body_id, action_id);
+                    }
                     break;
                 }
                 case 0x73: {
@@ -1120,9 +1128,41 @@ void net_poll()
                     char speaker[31];
                     speaker[31] = '\0';
                     read_ascii_fixed(&p, end, speaker, 30);
-                    // TODO: read arguments
 
+                    // TODO: handle arguments
                     printf("%s: %s\n", speaker, ml_get_cliloc(cliloc_id));
+                    // starts from 1
+                    int cnt = 1;
+                    printf("arg %d: ", cnt++);
+                    while (true)
+                    {
+                        // yes, this is little-endian
+                        int c = read_uint16_le(&p, end);
+                        if (c == 0)
+                        {
+                            printf("\n");
+                            break;
+                        }
+
+                        if (c == '\t')
+                        {
+                            printf("\n");
+                            printf("arg %d: ", cnt++);
+                        }
+                        else
+                        {
+                            printf("%c", c);
+                        }
+                    }
+
+                    break;
+                }
+                case 0xf0: {
+                    int ack = read_uint8(&p, end);
+                    printf("krrios client ack: %d '%s'\n", ack, ack == 0 ? "unauthed" :
+                                                                ack == 1 ? "ok, GM"   : 
+                                                                ack == 2 ? "ok, player" :
+                                                                "unknown");
 
                     break;
                 }
@@ -1180,6 +1220,7 @@ void net_connect()
     assert(inited);
     printf("connecting...\n");
     sockfd = net_connect("192.168.1.226", 2593);
+    //sockfd = net_connect("login.uoancorp.com", 2593);
     printf("ok!\n");
     if (sockfd == -1)
     {
@@ -1246,6 +1287,7 @@ void net_init()
     packet_lengths[0xdc] = 9; // item revision
     packet_lengths[0xdd] = 0; // display gump packed
     packet_lengths[0xdf] = 0; // "buff/debuff system" <- what is this?
+    packet_lengths[0xf0] = 0; // krrios client special
     packet_lengths[0xf3] = 24; // add item (new version)
 
     assert(!inited);

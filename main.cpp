@@ -1244,7 +1244,11 @@ void game_equip(mobile_t *m, uint32_t serial, int item_id, int layer, int hue_id
     item->space = SPACETYPE_EQUIPPED;
 
     assert(layer >= 0 && layer < 32);
-    assert(m->equipped_items[layer] == NULL || m->equipped_items[layer] == item);
+    if (m->equipped_items[layer] == NULL || m->equipped_items[layer] == item)
+    {
+        printf("got item duplicate item for a layer... this will likely leak memory\n");
+    }
+    //assert(m->equipped_items[layer] == NULL || m->equipped_items[layer] == item);
     m->equipped_items[layer] = item;
 }
 
