@@ -267,6 +267,17 @@ void net_send_use(uint32_t serial)
     send_packet(data, end);
 }
 
+void net_send_inspect(uint32_t serial)
+{
+    char data[5];
+    char *p = data;
+    char *end = p + sizeof(data);
+    write_uint8(&p, end, 0x09);
+    write_uint32_be(&p, end, serial);
+    assert(p == end);
+    send_packet(data, end);
+}
+
 extern int huffman_tree[256][2];
 
 void find_parent(int n, int *from, int *bit)

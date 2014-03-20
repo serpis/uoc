@@ -1731,6 +1731,8 @@ int main()
 
     int mouse_x;
     int mouse_y;
+
+    long last_click = -1;
  
     long start = SDL_GetTicks();
 
@@ -1871,10 +1873,6 @@ int main()
             }
         }
 
-        //draw_paperdoll(&player, 0, 0, pick_gump());
-
-
-
         // the rest of the logic is done after drawing, so that it can make use of the picking done in drawing stage
 
         // event polling
@@ -1894,47 +1892,62 @@ int main()
             {
                 if (e.button.button == SDL_BUTTON_LEFT)
                 {
-                    if (pick_target != NULL)
+                    // gah this handling code is quite messy...
+                    if (last_click != -1 && now - last_click < 200)
                     {
-                        int type = pick_target->type;
-                        switch (type)
+                        // double click!
+                        bool handled = false;
+                        if (pick_target != NULL)
                         {
-                            case TYPE_LAND:
-                                //printf("land (%d, %d)\n", pick_slots[id].land.x, pick_slots[id].land.y);
-                                break;
-                            case TYPE_STATIC:
-                                //printf("static\n");
-                                break;
-                            case TYPE_ITEM:
-                                printf("item %x\n", pick_target->item.item->serial);
-                                net_send_use(pick_target->item.item->serial);
-                                break;
-                            case TYPE_MOBILE:
-                                printf("mobile %x\n", pick_target->mobile.mobile->serial);
-                                net_send_use(pick_target->mobile.mobile->serial);
-                                break;
-                            case TYPE_GUMP:
-                                if (dragging.type == DRAGTYPE_NONE)
-                                {
-                                    gump_t *gump = pick_target->gump.gump;
-                                    dragging.type = DRAGTYPE_GUMP;
-                                    dragging.gump.gump = gump;
-                                    dragging.gump.handle_x = mouse_x - gump->x;
-                                    dragging.gump.handle_y = mouse_y - gump->y;
-                                }
-                                printf("gump\n");
-                                break;
-                            default:
-                                printf("unknown item picked :O\n");
-                                break;
+                            int type = pick_target->type;
+                            switch (type)
+                            {
+                                case TYPE_ITEM:
+                                    printf("item %x\n", pick_target->item.item->serial);
+                                    net_send_use(pick_target->item.item->serial);
+                                    handled = true;
+                                    break;
+                                case TYPE_MOBILE:
+                                    printf("mobile %x\n", pick_target->mobile.mobile->serial);
+                                    net_send_use(pick_target->mobile.mobile->serial);
+                                    handled = true;
+                                    break;
+                            }
                         }
+                        if (handled)
+                        {
+                            last_click = -1;
+                        }
+                    }
+                    else
+                    {
+                        // sometimes first click is handled instantly
+                        if (pick_target != NULL)
+                        {
+                            int type = pick_target->type;
+                            switch (type)
+                            {
+                                case TYPE_GUMP:
+                                    if (dragging.type == DRAGTYPE_NONE)
+                                    {
+                                        gump_t *gump = pick_target->gump.gump;
+                                        dragging.type = DRAGTYPE_GUMP;
+                                        dragging.gump.gump = gump;
+                                        dragging.gump.handle_x = mouse_x - gump->x;
+                                        dragging.gump.handle_y = mouse_y - gump->y;
+                                    }
+                                    printf("gump\n");
+                                    break;
+                            }
+                        }
+                        last_click = now;
                     }
                 }
                 if (e.button.button == SDL_BUTTON_RIGHT)
                 {
                     if (pick_target != NULL && pick_target->type == TYPE_GUMP)
                     {
-                        //game_
+                        // TODO: close gump
                     }
                     else
                     {
@@ -1991,6 +2004,39 @@ int main()
 
                 mouse_x = x;
                 mouse_y = y;
+            }
+        }
+
+        // double-click timed out... handle as single-click
+        if (last_click != -1 && now - last_click >= 200)
+        {
+            last_click = -1;
+            if (pick_target != NULL)
+            {
+                int type = pick_target->type;
+                switch (type)
+                {
+                    case TYPE_LAND:
+                        //printf("land (%d, %d)\n", pick_slots[id].land.x, pick_slots[id].land.y);
+                        break;
+                    case TYPE_STATIC:
+                        //printf("static\n");
+                        break;
+                    case TYPE_ITEM:
+                        printf("inspecting item %x\n", pick_target->item.item->serial);
+                        net_send_inspect(pick_target->item.item->serial);
+                        break;
+                    case TYPE_MOBILE:
+                        printf("inspecting mobile %x\n", pick_target->mobile.mobile->serial);
+                        net_send_inspect(pick_target->mobile.mobile->serial);
+                        break;
+                    case TYPE_GUMP:
+                        //printf("inspecting gump... O_o\n");
+                        break;
+                    default:
+                        printf("unknown item picked :O\n");
+                        break;
+                }
             }
         }
 
