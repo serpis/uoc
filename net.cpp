@@ -278,6 +278,18 @@ void net_send_inspect(uint32_t serial)
     send_packet(data, end);
 }
 
+void net_send_pick_up_item(uint32_t serial, int amount)
+{
+    char data[7];
+    char *p = data;
+    char *end = p + sizeof(data);
+    write_uint8(&p, end, 0x07);
+    write_uint32_be(&p, end, serial);
+    write_uint16_be(&p, end, amount);
+    assert(p == end);
+    send_packet(data, end);
+}
+
 extern int huffman_tree[256][2];
 
 void find_parent(int n, int *from, int *bit)
@@ -798,6 +810,7 @@ void net_poll()
                     // item_id == 0 means just inited
                     assert(item_id == 0 || item->space == SPACETYPE_CONTAINER);
                     item->space = SPACETYPE_CONTAINER;
+                    item->loc.container.container = container;
                     item->loc.container.x = x;
                     item->loc.container.y = y;
                     item->item_id = item_id;
@@ -848,6 +861,7 @@ void net_poll()
                         //printf("item_id: %d\n", item_id);
                         //assert(item_id == 0 || item->space == SPACETYPE_CONTAINER);
                         item->space = SPACETYPE_CONTAINER;
+                        item->loc.container.container = container;
                         item->loc.container.x = x;
                         item->loc.container.y = y;
                         item->item_id = item_id;
@@ -1283,6 +1297,7 @@ void net_init()
     packet_lengths[0xbf] = 0; // extended command
     packet_lengths[0xc0] = 36; // hued effect
     packet_lengths[0xc1] = 0; // cliloc message
+    packet_lengths[0xc8] = 2; // update range
     packet_lengths[0xd4] = 0; // book header
     packet_lengths[0xdc] = 9; // item revision
     packet_lengths[0xdd] = 0; // display gump packed

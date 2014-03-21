@@ -45,6 +45,11 @@ struct item_t
         } world;
         struct
         {
+            mobile_t *mobile;
+        } equipped;
+        struct
+        {
+            gump_t *container;
             int x, y;
         } container;
     } loc;

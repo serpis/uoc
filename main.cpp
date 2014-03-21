@@ -1241,10 +1241,11 @@ void game_equip(mobile_t *m, uint32_t serial, int item_id, int layer, int hue_id
     item_t *item = game_get_item(serial);
     item->item_id = item_id;
     item->hue_id = hue_id;
+    item->loc.equipped.mobile = m;
     item->space = SPACETYPE_EQUIPPED;
 
     assert(layer >= 0 && layer < 32);
-    if (m->equipped_items[layer] == NULL || m->equipped_items[layer] == item)
+    if (m->equipped_items[layer] != NULL && m->equipped_items[layer] != item)
     {
         printf("got item duplicate item for a layer... this will likely leak memory\n");
     }
@@ -1327,9 +1328,14 @@ void game_delete_object(uint32_t serial)
         std::map<int, item_t *>::iterator it = items.find(serial);
         if (it != items.end())
         {
-            // TODO: delete all contained items, gumps etc
+            item_t *item = it->second;
+            assert(item->space == SPACETYPE_WORLD);
+            // TODO: fix these things:
+            // 1. if item is in container, remove it from there
+            // 2. if item is equipped, remove it
+            // 3. if item is container, remove any gumps and item inside container
 
-            free(it->second);
+            free(item);
             items.erase(it);
         }
     }
@@ -2028,7 +2034,8 @@ int main()
                         break;
                     case TYPE_ITEM:
                         printf("inspecting item %x\n", pick_target->item.item->serial);
-                        net_send_inspect(pick_target->item.item->serial);
+                        //net_send_inspect(pick_target->item.item->serial);
+                        net_send_pick_up_item(pick_target->item.item->serial, 1);
                         break;
                     case TYPE_MOBILE:
                         printf("inspecting mobile %x\n", pick_target->mobile.mobile->serial);
