@@ -1,6 +1,16 @@
 #ifndef _MULLIB_HPP
 #define _MULLIB_HPP
 
+const uint64_t TILEFLAG_IMPASSABLE = 0x00000040;
+const uint64_t TILEFLAG_SURFACE    = 0x00000200;
+const uint64_t TILEFLAG_BRIDGE     = 0x00000400;
+const uint64_t TILEFLAG_FOLIAGE    = 0x00002000;
+const uint64_t TILEFLAG_CONTAINER  = 0x00200000;
+const uint64_t TILEFLAG_ROOF       = 0x10000000;
+const uint64_t TILEFLAG_DOOR       = 0x20000000;
+const uint64_t TILEFLAG_STAIRS_A   = 0x40000000;
+const uint64_t TILEFLAG_STAIRS_B   = 0x80000000;
+
 struct ml_tile_data_entry
 {
     uint64_t flags;

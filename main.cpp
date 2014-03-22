@@ -527,7 +527,7 @@ static struct
 
 struct statics_block_entry_t
 {
-    int tile_id;
+    int item_id;
     int dx, dy, z;
 };
 
@@ -796,7 +796,7 @@ void write_statics_block(int map, int block_x, int block_y, ml_statics_block *sb
 
     for (int i = 0; i < sb->statics_count; i++)
     {
-        statics_block_cache.entries[cache_block_index].statics_block.statics[i].tile_id = sb->statics[i].tile_id;
+        statics_block_cache.entries[cache_block_index].statics_block.statics[i].item_id = sb->statics[i].tile_id;
         statics_block_cache.entries[cache_block_index].statics_block.statics[i].dx = sb->statics[i].dx;
         statics_block_cache.entries[cache_block_index].statics_block.statics[i].dy = sb->statics[i].dy;
         statics_block_cache.entries[cache_block_index].statics_block.statics[i].z = sb->statics[i].z;
@@ -1014,6 +1014,18 @@ int land_block_z_slow(int x, int y)
     {
         return 0;
     }
+}
+
+int land_block_z_averaged(int x, int y)
+{
+    int z_sum = 0;
+    const int dxs[4] = { 0, 1, 1, 0 };
+    const int dys[4] = { 0, 0, 1, 1 };
+    for (int i = 0; i < 4; i++)
+    {
+        z_sum += land_block_z_slow(x + dxs[i], y + dys[i]);
+    }
+    return z_sum / 4;
 }
 
 // this might be optimized when it comes to z calculations
@@ -1241,13 +1253,13 @@ void draw_world_statics_block(int map, int block_x, int block_y)
     {
         for (int i = 0; i < sb->statics_count; i++)
         {
-            int item_id = sb->statics[i].tile_id;
+            int item_id = sb->statics[i].item_id;
             int dx = sb->statics[i].dx;
             int dy = sb->statics[i].dy;
             int z  = sb->statics[i].z;
 
             // conditionally skip roofs
-            if (ml_get_item_data(item_id)->flags & 0x10000000 && !draw_roofs)
+            if ((ml_get_item_data(item_id)->flags & TILEFLAG_ROOF) && !draw_roofs)
             {
                 continue;
             }
@@ -1522,7 +1534,7 @@ int find_ceiling(int map, int p_x, int p_y, int p_z)
     {
         for (int i = 0; i < sb->statics_count; i++)
         {
-            int item_id = sb->statics[i].tile_id;
+            int item_id = sb->statics[i].item_id;
             int dx = sb->statics[i].dx;
             int dy = sb->statics[i].dy;
             int z  = sb->statics[i].z;
@@ -1533,7 +1545,7 @@ int find_ceiling(int map, int p_x, int p_y, int p_z)
             {
                 ceiling = z;
 
-                if (item_data->flags & 0x10000000)
+                if (item_data->flags & TILEFLAG_ROOF)
                 {
                     //printf("is roof %d %d %d %d %d\n", item_data->weight, item_data->quality, item_data->quantity, item_data->animation, item_data->height);
                     is_roof = true;
@@ -1573,12 +1585,12 @@ bool has_roof(int map, int p_x, int p_y)
     {
         for (int i = 0; i < sb->statics_count; i++)
         {
-            int item_id = sb->statics[i].tile_id;
+            int item_id = sb->statics[i].item_id;
             int dx = sb->statics[i].dx;
             int dy = sb->statics[i].dy;
             int z  = sb->statics[i].z;
 
-            if (dx == p_dx && dy == p_dy && ml_get_item_data(item_id)->flags & 0x10000000)
+            if (dx == p_dx && dy == p_dy && (ml_get_item_data(item_id)->flags & TILEFLAG_ROOF))
             {
                 return true;
             }
@@ -1750,6 +1762,110 @@ void game_do_action(uint32_t mob_serial, int action_id, int frame_count, int rep
         m->anim_frame_count = frame_count;
         m->anim_total_frames = frame_count * (do_repeat ? repeat_count : 1);
     }
+}
+
+int find_move_z(int map, int x, int y, int cur_z)
+{
+    int block_x = x / 8;
+    int block_y = y / 8;
+
+    land_block_t *lb    = get_land_block   (map, block_x, block_y);
+    statics_block_t *sb = get_statics_block(map, block_x, block_y);
+    if (!lb || !sb)
+    {
+        // land block or statics block not yet loaded
+        return -1;
+    }
+
+    const int mob_height  = 16;
+    const int step_height =  2;
+
+    // first, find the highest steppable surface in [-128, z+step_height]
+    int highest_steppable_z = -1;
+    {
+        // TODO: land_block_z_averaged doesn't check that the land_blocks of all four z's are actually loaded before averaging. FIX THIS!
+        int lb_z = land_block_z_averaged(x, y);
+        int tile_id = lb->tiles[(x % 8) + (y % 8) * 8].tile_id;
+        ml_tile_data_entry *tile_data = ml_get_tile_data(tile_id);
+        if ((tile_data->flags & TILEFLAG_IMPASSABLE) == 0)
+        {
+            highest_steppable_z = lb_z;
+        }
+    }
+
+    for (int i = 0; i < sb->statics_count; i++)
+    {
+        statics_block_entry_t *sbe = &sb->statics[i];
+        int sx = block_x * 8 + sbe->dx;
+        int sy = block_y * 8 + sbe->dy;
+        int sz = sbe->z;
+        int item_id = sbe->item_id;
+
+        if (sx == x && sy == y)
+        {
+            ml_item_data_entry *item_data = ml_get_item_data(item_id);
+            bool is_bridge = (item_data->flags & TILEFLAG_BRIDGE) != 0;
+            int test_height = is_bridge ? item_data->height / 2 : item_data->height;
+            int test_z = sz + test_height;
+            /*if (is_bridge)
+            {
+            printf("comparing %d %d %d to player %d %d %d\n", sx, sy, test_z, x, y, cur_z);
+            printf("test_z %d, cur_z + step_height %d\n", test_z, cur_z + step_height);
+            }*/
+
+            if ((item_data->flags & TILEFLAG_IMPASSABLE) == 0 &&
+                (item_data->flags & TILEFLAG_SURFACE   ) != 0 &&
+                    test_z <= cur_z + step_height &&
+                    (highest_steppable_z == -1 || test_z > highest_steppable_z))
+            {
+                highest_steppable_z = sz + item_data->height;
+            }
+        }
+    }
+
+    // second, try to find reasons to disqualify the selected z
+    // could be:
+    // 1. there is something on top blocking it
+
+    if (highest_steppable_z != -1)
+    {
+        // TODO: land_block_z_averaged doesn't check that the land_blocks of all four z's are actually loaded before averaging. FIX THIS!
+        int lb_z = land_block_z_averaged(x, y);
+        int tile_id = lb->tiles[(x % 8) + (y % 8) * 8].tile_id;
+        ml_tile_data_entry *tile_data = ml_get_tile_data(tile_id);
+        if ((tile_data->flags & TILEFLAG_IMPASSABLE) != 0 && lb_z > highest_steppable_z)
+        {
+            highest_steppable_z = -1;
+        }
+    }
+
+    for (int i = 0; i < sb->statics_count && highest_steppable_z != -1; i++)
+    {
+        statics_block_entry_t *sbe = &sb->statics[i];
+        int sx = block_x * 8 + sbe->dx;
+        int sy = block_y * 8 + sbe->dy;
+        int sz = sbe->z;
+        int item_id = sbe->item_id;
+
+        if (sx == x && sy == y)
+        {
+            ml_item_data_entry *item_data = ml_get_item_data(item_id);
+            bool is_bridge = (item_data->flags & TILEFLAG_BRIDGE) != 0;
+            int test_height = is_bridge ? item_data->height / 2 : item_data->height;
+            int test_z = sz + test_height;
+
+            bool blocks = (item_data->flags & TILEFLAG_IMPASSABLE);
+
+            if (blocks &&
+                (test_z > highest_steppable_z && sz < highest_steppable_z + mob_height))
+            {
+                highest_steppable_z = -1;
+            }
+        }
+    }
+
+
+    return highest_steppable_z;
 }
 
 int main()
@@ -2027,19 +2143,52 @@ int main()
                                     printf("gump\n");
                                     break;
                                 case TYPE_LAND:
-                                    printf("land at (%d, %d, %d), tile_id: %d\n",
+                                    printf("land at (%d, %d, %d), tile_id: %d, surface: %d, impassable: %d, stairs: %d\n",
                                             pick_target->land.x,
                                             pick_target->land.y,
                                             pick_target->land.z,
-                                            pick_target->land.tile_id);
+                                            pick_target->land.tile_id,
+                                            (ml_get_tile_data(pick_target->land.tile_id)->flags & TILEFLAG_SURFACE   ) != 0,
+                                            (ml_get_tile_data(pick_target->land.tile_id)->flags & TILEFLAG_IMPASSABLE) != 0,
+                                            ((ml_get_tile_data(pick_target->land.tile_id)->flags & TILEFLAG_STAIRS_A ) != 0 ||
+                                             (ml_get_tile_data(pick_target->land.tile_id)->flags & TILEFLAG_STAIRS_B ) != 0));
                                     break;
                                 case TYPE_STATIC:
-                                    printf("static at (%d, %d, %d), item_id: %d\n",
+                                {
+                                    bool check_a = ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_STAIRS_A != 0;
+                                    bool check_b = ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_STAIRS_B != 0;
+                                    printf("static at (%d, %d, %d), item_id: %d, surface: %d, impassable: %d, stairs: %d flags: %lx, ca: %d, cb: %d %lx\n",
                                             pick_target->static_item.x,
                                             pick_target->static_item.y,
                                             pick_target->static_item.z,
-                                            pick_target->static_item.item_id);
+                                            pick_target->static_item.item_id,
+                                            (ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_SURFACE   ) != 0,
+                                            (ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_IMPASSABLE) != 0,
+                                            ((ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_STAIRS_A ) != 0 ||
+                                             (ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_STAIRS_B ) != 0),
+                                            (long unsigned int)ml_get_item_data(pick_target->static_item.item_id)->flags,
+                                            check_a, check_b,
+                                            ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_STAIRS_B);
                                     break;
+                                }
+                                case TYPE_ITEM:
+                                {
+                                    item_t *item = pick_target->item.item;
+                                    bool check_a = ml_get_item_data(item->item_id)->flags & TILEFLAG_STAIRS_A != 0;
+                                    bool check_b = ml_get_item_data(item->item_id)->flags & TILEFLAG_STAIRS_B != 0;
+                                    printf("item at (%d, %d, %d), item_id: %d, surface: %d, impassable: %d, stairs: %d flags: %lx, ca: %d, cb: %d\n",
+                                            item->loc.world.x,
+                                            item->loc.world.y,
+                                            item->loc.world.z,
+                                            item->item_id,
+                                            (ml_get_item_data(item->item_id)->flags & TILEFLAG_SURFACE   ) != 0,
+                                            (ml_get_item_data(item->item_id)->flags & TILEFLAG_IMPASSABLE) != 0,
+                                            ((ml_get_item_data(item->item_id)->flags & TILEFLAG_STAIRS_A ) != 0 ||
+                                             (ml_get_item_data(item->item_id)->flags & TILEFLAG_STAIRS_B ) != 0),
+                                            (long unsigned int)ml_get_item_data(item->item_id)->flags,
+                                            check_a, check_b);
+                                    break;
+                                }
                             }
                         }
                         last_click = now;
@@ -2210,18 +2359,26 @@ int main()
         {
             if (player.dir == move_dir)
             {
-                player.x += move_dx;
-                player.y += move_dy;
+                int new_x = player.x + move_dx;
+                int new_y = player.y + move_dy;
+
+                int new_z = find_move_z(1, new_x, new_y, player.z);
+                if (new_z != -1)
+                {
+                    player.x = new_x;
+                    player.y = new_y;
+                    player.z = new_z;
+                    net_send_move(player.dir);
+                    player.last_movement = next_move;
+                }
             }
             else
             {
                 player.last_dir = player.dir;
                 player.dir = move_dir;
+                net_send_move(player.dir);
+                player.last_movement = next_move;
             }
-            net_send_move(player.dir);
-
-            player.last_movement = next_move;
-
             next_move += 100;
         }
 
