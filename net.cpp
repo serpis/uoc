@@ -766,7 +766,14 @@ void net_poll()
                     printf("map width: %d height: %d\n", map_width, map_height);
                     read_uint32_be(&p, end);
                     read_uint16_be(&p, end);
-                    game_set_player_info(serial, body_id, x, y, z, 0, dir);
+
+                    game_set_player_serial(serial);
+                    mobile_t *m = game_get_mobile(serial);
+                    m->body_id = body_id;
+                    m->x = x;
+                    m->y = y;
+                    m->z = z;
+                    m->dir = dir;
 
                     break;
                 }
@@ -778,36 +785,44 @@ void net_poll()
                 }
                 case 0x20: {
                     uint32_t serial = read_uint32_be(&p, end);
-                    int body_id = read_uint16_be(&p, end);
+                    game_set_player_serial(serial);
+
+                    mobile_t *m = game_get_mobile(serial);
+
+                    m->body_id = read_uint16_be(&p, end);
                     read_uint8(&p, end);
-                    int hue_id = read_uint16_be(&p, end);
-                    int flags = read_uint8(&p, end);
-                    int x = read_uint16_be(&p, end);
-                    int y = read_uint16_be(&p, end);
+                    m->hue_id = read_uint16_be(&p, end);
+                    m->flags = read_uint8(&p, end);
+                    m->x = read_uint16_be(&p, end);
+                    m->y = read_uint16_be(&p, end);
                     read_uint16_be(&p, end);
-                    int dir = read_uint8(&p, end);
-                    int z = read_sint8(&p, end);
-                    //printf("0x20: hue_id = %04x\n", hue_id);
-                    game_set_player_info(serial, body_id, x, y, z, hue_id, dir);
+                    m->dir = read_uint8(&p, end);
+                    m->z = read_sint8(&p, end);
+
                     break;
                 }
                 case 0x21: {
+                    uint32_t serial = game_get_player_serial();
+                    mobile_t *m = game_get_mobile(serial);
+
                     int seq = read_uint8(&p, end);
-                    int x = read_uint16_be(&p, end);
-                    int y = read_uint16_be(&p, end);
-                    int dir = read_uint8(&p, end);
-                    int z = read_sint8(&p, end);
+                    m->x = read_uint16_be(&p, end);
+                    m->y = read_uint16_be(&p, end);
+                    m->dir = read_uint8(&p, end);
+                    m->z = read_sint8(&p, end);
 
                     // reset movement sequence
                     move_sequence = 0;
 
                     //printf("move reject seq %d\n", seq);
-                    game_set_player_pos(x, y, z, dir);
                     break;
                 }
                 case 0x22: {
+                    uint32_t serial = game_get_player_serial();
+                    mobile_t *m = game_get_mobile(serial);
+
                     int seq = read_uint8(&p, end);
-                    uint8_t status = read_uint8(&p, end);
+                    m->flags = read_uint8(&p, end);
 
                     //printf("move ack seq %d\n", seq);
                     break;

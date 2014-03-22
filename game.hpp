@@ -85,8 +85,8 @@ struct gump_t
     };
 };
 
-void game_set_player_info(uint32_t serial, int body_id, int x, int y, int z, int hue_id, int dir);
-void game_set_player_pos(int x, int y, int z, int dir);
+void game_set_player_serial(uint32_t serial);
+uint32_t game_get_player_serial();
 void game_equip(mobile_t *m, uint32_t serial, int item_id, int layer, int hue);
 item_t *game_get_item(uint32_t serial);
 mobile_t *game_get_mobile(uint32_t serial);

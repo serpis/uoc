@@ -1248,25 +1248,15 @@ void draw_world_statics_block(int map, int block_x, int block_y)
     }
 }
 
-void game_set_player_info(uint32_t serial, int body_id, int x, int y, int z, int hue_id, int dir)
+void game_set_player_serial(uint32_t serial)
 {
     printf("player serial: %x\n", serial);
     player.serial = serial;
-    player.body_id = body_id;
-    player.x = x;
-    player.y = y;
-    player.z = z;
-    player.hue_id = hue_id;
-    player.dir = dir;
 }
 
-void game_set_player_pos(int x, int y, int z, int dir)
+uint32_t game_get_player_serial()
 {
-    //printf("player pos: %d %d %d\n", x, y, z);
-    player.x = x;
-    player.y = y;
-    player.z = z;
-    player.dir = dir;
+    return player.serial;
 }
 
 void game_equip(mobile_t *m, uint32_t serial, int item_id, int layer, int hue_id)
