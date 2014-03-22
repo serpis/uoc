@@ -50,10 +50,13 @@ struct pick_target_t
     {
         struct 
         {
-            int x, y;
+            int x, y, z;
+            int tile_id;
         } land;
         struct 
         {
+            int x, y, z;
+            int item_id;
         } static_item;
         struct 
         {
@@ -104,7 +107,7 @@ static int layer_draw_order[32] =
      0, 25, 26, 27, 28, 29, 30, 31,
 };
 
-int pick_land(int x, int y)
+int pick_land(int x, int y, int z, int tile_id)
 {
     if (!picking_enabled)
     {
@@ -114,10 +117,12 @@ int pick_land(int x, int y)
     pick_slots[next_pick_id].type = TYPE_LAND;
     pick_slots[next_pick_id].land.x = x;
     pick_slots[next_pick_id].land.y = y;
+    pick_slots[next_pick_id].land.z = z;
+    pick_slots[next_pick_id].land.tile_id = tile_id;
     return next_pick_id++;
 }
 
-int pick_static()
+int pick_static(int x, int y, int z, int item_id)
 {
     if (!picking_enabled)
     {
@@ -125,6 +130,10 @@ int pick_static()
     }
     assert(next_pick_id < sizeof(pick_slots)/sizeof(pick_slots[0]));
     pick_slots[next_pick_id].type = TYPE_STATIC;
+    pick_slots[next_pick_id].static_item.x = x;
+    pick_slots[next_pick_id].static_item.y = y;
+    pick_slots[next_pick_id].static_item.z = z;
+    pick_slots[next_pick_id].static_item.item_id = item_id;
     return next_pick_id++;
 }
 
@@ -1112,11 +1121,11 @@ void draw_world_land_block(int map, int block_x, int block_y)
         for (int dx = 0; dx < 8; dx++)
         {
             int tile_id = lb->tiles[dx + dy * 8].tile_id;
-            //int z = lb->tiles[dx + dy * 8].z;
+            int z = lb->tiles[dx + dy * 8].z;
 
             int x = 8 * block_x + dx;
             int y = 8 * block_y + dy;
-            int pick_id = pick_land(x, y);
+            int pick_id = pick_land(x, y, z, tile_id);
             draw_world_land(tile_id, x, y, pick_id);
         }
     }
@@ -1243,7 +1252,9 @@ void draw_world_statics_block(int map, int block_x, int block_y)
                 continue;
             }
 
-            draw_world_item(item_id, 8 * block_x + dx, 8 * block_y + dy, z, 0, pick_static());
+            int x = 8 * block_x + dx;
+            int y = 8 * block_y + dy;
+            draw_world_item(item_id, x, y, z, 0, pick_static(x, y, z, item_id));
         }
     }
 }
@@ -2014,6 +2025,20 @@ int main()
                                         dragging.gump.handle_y = mouse_y - gump->y;
                                     }
                                     printf("gump\n");
+                                    break;
+                                case TYPE_LAND:
+                                    printf("land at (%d, %d, %d), tile_id: %d\n",
+                                            pick_target->land.x,
+                                            pick_target->land.y,
+                                            pick_target->land.z,
+                                            pick_target->land.tile_id);
+                                    break;
+                                case TYPE_STATIC:
+                                    printf("static at (%d, %d, %d), item_id: %d\n",
+                                            pick_target->static_item.x,
+                                            pick_target->static_item.y,
+                                            pick_target->static_item.z,
+                                            pick_target->static_item.item_id);
                                     break;
                             }
                         }
