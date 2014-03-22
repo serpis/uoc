@@ -290,6 +290,22 @@ void net_send_pick_up_item(uint32_t serial, int amount)
     send_packet(data, end);
 }
 
+void net_send_drop_item(uint32_t item_serial, int x, int y, int z, uint32_t cont_serial)
+{
+    char data[15];
+    char *p = data;
+    char *end = p + sizeof(data);
+    write_uint8(&p, end, 0x08);
+    write_uint32_be(&p, end, item_serial);
+    write_uint16_be(&p, end, x);
+    write_uint16_be(&p, end, y);
+    write_sint8(&p, end, z);
+    write_uint8(&p, end, 0); // backpack grid index
+    write_uint32_be(&p, end, cont_serial);
+    assert(p == end);
+    send_packet(data, end);
+}
+
 extern int huffman_tree[256][2];
 
 void find_parent(int n, int *from, int *bit)
@@ -805,7 +821,8 @@ void net_poll()
 
                     item_t *item = game_get_item(serial);
                     // item_id == 0 means just inited
-                    assert(item_id == 0 || item->space == SPACETYPE_CONTAINER);
+                    printf("item_id: %d, space: %d\n", item->item_id, item->space);
+                    assert(item->item_id == 0 || item->space == SPACETYPE_CONTAINER);
                     item->space = SPACETYPE_CONTAINER;
                     item->loc.container.container = container;
                     item->loc.container.x = x;
@@ -866,9 +883,9 @@ void net_poll()
                         gump_t *container = game_get_container(cont_serial);
 
                         item_t *item = game_get_item(serial);
-                        // item_id == 0 means just inited
-                        //printf("item_id: %d\n", item_id);
-                        //assert(item_id == 0 || item->space == SPACETYPE_CONTAINER);
+                        //item_id == 0 means just inited
+                        printf("item_id: %d, space: %d\n", item->item_id, item->space);
+                        assert(item->item_id == 0 || item->space == SPACETYPE_CONTAINER);
                         item->space = SPACETYPE_CONTAINER;
                         item->loc.container.container = container;
                         item->loc.container.x = x;

@@ -73,8 +73,6 @@ static pick_target_t pick_slots[0x10000];
 static bool picking_enabled = false;
 static int next_pick_id = 0;
 
-static int next_gump_serial = 0x10000000;
-
 const int DRAGTYPE_NONE = 0;
 const int DRAGTYPE_ITEM = 1;
 const int DRAGTYPE_GUMP = 2;
@@ -85,6 +83,7 @@ static struct
     {
         struct
         {
+            uint32_t serial;
             int item_id;
             int hue_id;
         } item;
@@ -1368,6 +1367,7 @@ void game_show_container(uint32_t item_serial, int gump_id)
         gump_t *container = (gump_t *)malloc(sizeof(gump_t));
         memset(container, 0, sizeof(gump_t));
         container->type = GUMPTYPE_CONTAINER;
+        container->container.item = item;
         container->container.gump_id = gump_id;
         container->container.items = new std::list<item_t *>();
 
@@ -1390,7 +1390,6 @@ void game_show_paperdoll(mobile_t *m)
         memset(paperdoll, 0, sizeof(gump_t));
         paperdoll->type = GUMPTYPE_PAPERDOLL;
         paperdoll->paperdoll.mobile = m;
-        paperdoll->serial = next_gump_serial++;
         m->paperdoll_gump = paperdoll;
 
         gump_list.push_back(paperdoll);
@@ -2000,8 +1999,45 @@ int main()
                 if (e.button.button == SDL_BUTTON_LEFT)
                 {
                     left_down = false;
-                    if (dragging.type == DRAGTYPE_GUMP)
+                    if (dragging.type == DRAGTYPE_ITEM)
                     {
+                        if (pick_target != NULL)
+                        {
+                            if (pick_target->type == TYPE_GUMP)
+                            {
+                                gump_t *gump = pick_target->gump.gump;
+                                if (gump->type == GUMPTYPE_CONTAINER)
+                                {
+                                    net_send_drop_item(dragging.item.serial, 0, 0, 0, gump->container.item->serial);
+                                    dragging.type = DRAGTYPE_NONE;
+                                }
+                                else
+                                {
+                                    printf("TODO: figure out how to drop into this gump.\n");
+                                }
+                            }
+                            else if (pick_target->type == TYPE_ITEM)
+                            {
+                                printf("TODO: figure out now how to drop onto an item.\n");
+                            }
+                            else if (pick_target->type == TYPE_MOBILE)
+                            {
+                                printf("TODO: figure out now how to drop onto a mobile.\n");
+                            }
+                            else if (pick_target->type == TYPE_LAND)
+                            {
+                                printf("TODO: figure out now how to drop onto a land tile.\n");
+                            }
+                            else if (pick_target->type == TYPE_STATIC)
+                            {
+                                printf("TODO: figure out now how to drop onto a static item.\n");
+                            }
+                        }
+                        last_click = -1;
+                    }
+                    else if (dragging.type == DRAGTYPE_GUMP)
+                    {
+                        last_click = -1;
                         dragging.type = DRAGTYPE_NONE;
                     }
                 }
@@ -2072,6 +2108,7 @@ int main()
                                 net_send_pick_up_item(pick_target->item.item->serial, 1);
                                 item_t *item = pick_target->item.item;
                                 dragging.type = DRAGTYPE_ITEM;
+                                dragging.item.serial = item->serial;
                                 dragging.item.item_id = item->item_id;
                                 dragging.item.hue_id = item->hue_id;
                             }

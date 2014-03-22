@@ -8,6 +8,13 @@ void write_uint8(char **p, const char *end, uint8_t b)
     *p += 1;
 }
 
+void write_sint8(char **p, const char *end, int8_t b)
+{
+    assert(*p < end);
+    **p = b;
+    *p += 1;
+}
+
 void write_uint16_be(char **p, const char *end, uint16_t u)
 {
     write_uint8(p, end, u >> 8);

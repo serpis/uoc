@@ -62,13 +62,13 @@ const int GUMPTYPE_PAPERDOLL = 1;
 struct gump_t
 {
     int type;
-    int serial;
     int x, y;
     union
     {
         struct
         {
             int gump_id;
+            item_t *item;
             std::list<item_t *> *items;
         } container;
         struct
