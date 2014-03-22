@@ -1172,21 +1172,30 @@ void net_poll()
                     printf("%s: %s\n", speaker, ml_get_cliloc(cliloc_id));
                     // starts from 1
                     int cnt = 1;
-                    printf("arg %d: ", cnt++);
+                    bool new_arg = true;
                     while (true)
                     {
                         // yes, this is little-endian
                         int c = read_uint16_le(&p, end);
                         if (c == 0)
                         {
-                            printf("\n");
+                            if (!new_arg)
+                            {
+                                printf("\n");
+                            }
                             break;
+                        }
+
+                        if (new_arg)
+                        {
+                            printf("arg %d: ", cnt++);
+                            new_arg = false;
                         }
 
                         if (c == '\t')
                         {
                             printf("\n");
-                            printf("arg %d: ", cnt++);
+                            new_arg = true;
                         }
                         else
                         {

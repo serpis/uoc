@@ -2008,7 +2008,9 @@ int main()
                                 gump_t *gump = pick_target->gump.gump;
                                 if (gump->type == GUMPTYPE_CONTAINER)
                                 {
-                                    net_send_drop_item(dragging.item.serial, 0, 0, 0, gump->container.item->serial);
+                                    int offset_x = mouse_x - gump->x;
+                                    int offset_y = mouse_y - gump->y;
+                                    net_send_drop_item(dragging.item.serial, offset_x, offset_y, 0, gump->container.item->serial);
                                     dragging.type = DRAGTYPE_NONE;
                                 }
                                 else
