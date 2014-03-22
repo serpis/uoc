@@ -3,6 +3,11 @@
 #include <cassert>
 #include <cstring>
 
+#include <string>
+#include <iostream>
+#include <sstream>
+#include <vector>
+
 #include <stdint.h>
 
 #include <unistd.h>
@@ -18,9 +23,21 @@
 #include "game.hpp"
 #include "mullib.hpp" // only for ml_get_cliloc... move to game?
 
-bool enable_compression = false;
+static bool enable_compression = false;
 
-int compress(char *dst, const char *dst_end, const char *src, const char *src_end);
+static int compress(char *dst, const char *dst_end, const char *src, const char *src_end);
+
+static std::wstring cstr_to_wstring(const char *s)
+{
+    const char *p = s;
+    std::wstring ws;
+    while (*p)
+    {
+        ws += *p;
+        p++;
+    }
+    return ws;
+}
 
 static void *get_in_addr(struct sockaddr *sa)
 {
@@ -1168,40 +1185,70 @@ void net_poll()
                     speaker[30] = '\0';
                     read_ascii_fixed(&p, end, speaker, 30);
 
-                    // TODO: handle arguments
-                    printf("%s: %s\n", speaker, ml_get_cliloc(cliloc_id));
-                    // starts from 1
-                    int cnt = 1;
-                    bool new_arg = true;
+                    std::wstring format = cstr_to_wstring(ml_get_cliloc(cliloc_id));
+                    std::vector<std::wstring> args;
+                    std::wstring arg;
                     while (true)
                     {
                         // yes, this is little-endian
                         int c = read_uint16_le(&p, end);
                         if (c == 0)
                         {
-                            if (!new_arg)
+                            if (arg.length() > 0)
                             {
-                                printf("\n");
+                                args.push_back(arg);
                             }
                             break;
                         }
 
-                        if (new_arg)
-                        {
-                            printf("arg %d: ", cnt++);
-                            new_arg = false;
-                        }
-
                         if (c == '\t')
                         {
-                            printf("\n");
-                            new_arg = true;
+                            args.push_back(arg);
+                            arg = L"";
                         }
                         else
                         {
-                            printf("%c", c);
+                            arg += c;
                         }
                     }
+
+                    std::wstring res;
+                    for (int i = 0; i < format.length(); i++)
+                    {
+                        if (format[i] == '~')
+                        {
+                            // arg substitution
+                            long num_end = format.find('_', i+1);
+                            if (num_end == std::wstring::npos)
+                            {
+                                num_end = format.length();
+                            }
+                            std::wstring num_str = format.substr(i+1, num_end-(i+1));
+
+                            int arg_idx;
+                            std::wistringstream(num_str) >> arg_idx;
+
+                            // arguments are 1-indexed, but our array is 0-indexed
+                            arg_idx -= 1;
+                            assert(arg_idx >= 0 && arg_idx < args.size());
+
+                            res += args[arg_idx];
+
+                            // skip rest of arg in format string
+                            long next_tilde = format.find('~', i+1);
+                            if (next_tilde == std::wstring::npos)
+                            {
+                                next_tilde = format.length();
+                            }
+                            i = next_tilde;
+                        }
+                        else
+                        {
+                            res += format[i];
+                        }
+                    }
+
+                    std::wcout << speaker << ": " << res << std::endl;
 
                     break;
                 }
