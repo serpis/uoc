@@ -85,6 +85,8 @@ static struct
     {
         struct
         {
+            int item_id;
+            int hue_id;
         } item;
         struct
         {
@@ -1329,11 +1331,18 @@ void game_delete_object(uint32_t serial)
         if (it != items.end())
         {
             item_t *item = it->second;
-            assert(item->space == SPACETYPE_WORLD);
+            assert(item->space == SPACETYPE_WORLD || item->space == SPACETYPE_CONTAINER);
+            assert(item->container_gump == NULL);
+
+            if (item->space == SPACETYPE_CONTAINER)
+            {
+                assert(item->loc.container.container->type == GUMPTYPE_CONTAINER);
+                item->loc.container.container->container.items->remove(item);
+            }
             // TODO: fix these things:
-            // 1. if item is in container, remove it from there
-            // 2. if item is equipped, remove it
-            // 3. if item is container, remove any gumps and item inside container
+            // 1. if item is in container, remove container's reference from there
+            // 2. if item is equipped, remove mobile's reference to it
+            // 3. if item is container, delete any gumps and items inside container
 
             free(item);
             items.erase(it);
@@ -1360,6 +1369,7 @@ void game_show_container(uint32_t item_serial, int gump_id)
         memset(container, 0, sizeof(gump_t));
         container->type = GUMPTYPE_CONTAINER;
         container->container.gump_id = gump_id;
+        container->container.items = new std::list<item_t *>();
 
         item->container_gump = container;
 
@@ -1654,9 +1664,9 @@ void draw_container(gump_t *container)
     int x = container->x;
     int y = container->y;
     draw_gump(container->container.gump_id, x, y, 0, pick_gump(container));
-    for (int i = 0; i < container->container.item_count; i++)
+    for (std::list<item_t *>::iterator it = container->container.items->begin(); it != container->container.items->end(); ++it)
     {
-        item_t *item = container->container.items[i];
+        item_t *item = *it;
 
         assert(item->space == SPACETYPE_CONTAINER);
 
@@ -1683,6 +1693,14 @@ void draw_gump(gump_t *gump)
             printf("unknown gump type: %d\n", gump->type);
             assert(0 && "unknown gump type");
             break;
+    }
+}
+
+void game_pick_up_rejected()
+{
+    if (dragging.type == DRAGTYPE_ITEM)
+    {
+        dragging.type = DRAGTYPE_NONE;
     }
 }
 
@@ -1743,6 +1761,7 @@ int main()
     int mouse_y;
 
     long last_click = -1;
+    bool left_down = false;
  
     long start = SDL_GetTicks();
 
@@ -1883,6 +1902,16 @@ int main()
             }
         }
 
+        // draw dragged item
+        if (dragging.type == DRAGTYPE_ITEM)
+        {
+            int item_id = dragging.item.item_id;
+            int hue_id  = dragging.item.hue_id;
+
+            draw_screen_item(item_id, mouse_x, mouse_y, hue_id, -1);
+        }
+
+
         // the rest of the logic is done after drawing, so that it can make use of the picking done in drawing stage
 
         // event polling
@@ -1902,6 +1931,7 @@ int main()
             {
                 if (e.button.button == SDL_BUTTON_LEFT)
                 {
+                    left_down = true;
                     // gah this handling code is quite messy...
                     if (last_click != -1 && now - last_click < 200)
                     {
@@ -1969,6 +1999,7 @@ int main()
             {
                 if (e.button.button == SDL_BUTTON_LEFT)
                 {
+                    left_down = false;
                     if (dragging.type == DRAGTYPE_GUMP)
                     {
                         dragging.type = DRAGTYPE_NONE;
@@ -2033,9 +2064,23 @@ int main()
                         //printf("static\n");
                         break;
                     case TYPE_ITEM:
-                        printf("inspecting item %x\n", pick_target->item.item->serial);
-                        //net_send_inspect(pick_target->item.item->serial);
-                        net_send_pick_up_item(pick_target->item.item->serial, 1);
+                        if (left_down)
+                        {
+                            if (dragging.type == DRAGTYPE_NONE)
+                            {
+                                printf("dragging item %x\n", pick_target->item.item->serial);
+                                net_send_pick_up_item(pick_target->item.item->serial, 1);
+                                item_t *item = pick_target->item.item;
+                                dragging.type = DRAGTYPE_ITEM;
+                                dragging.item.item_id = item->item_id;
+                                dragging.item.hue_id = item->hue_id;
+                            }
+                        }
+                        else
+                        {
+                            printf("inspecting item %x\n", pick_target->item.item->serial);
+                            net_send_inspect(pick_target->item.item->serial);
+                        }
                         break;
                     case TYPE_MOBILE:
                         printf("inspecting mobile %x\n", pick_target->mobile.mobile->serial);

@@ -803,9 +803,6 @@ void net_poll()
 
                     gump_t *container = parent_item->container_gump;;
 
-                    // TODO: don't use magic constant here
-                    assert(container->container.item_count < 256);
-                    
                     item_t *item = game_get_item(serial);
                     // item_id == 0 means just inited
                     assert(item_id == 0 || item->space == SPACETYPE_CONTAINER);
@@ -816,11 +813,25 @@ void net_poll()
                     item->item_id = item_id;
                     item->hue_id = hue_id;
 
-                    container->container.items[container->container.item_count] = item;
-                    container->container.item_count += 1;
+                    container->container.items->push_back(item);
 
                     printf("adding item to container: %08x\n", serial);
 
+                    break;
+                }
+                case 0x27: {
+                    int reason = read_uint8(&p, end);
+                    switch (reason)
+                    {
+
+                        case 0: printf("reject pick up: cannot lift this!\n"); break;
+                        case 1: printf("reject pick up: out of range\n"); break;
+                        case 2: printf("reject pick up: out of sight\n"); break;
+                        case 3: printf("reject pick up: belongs to someone else. you have to steal it!\n"); break;
+                        case 4: printf("reject pick up: already holding something\n"); break;
+                        default: printf("reject pick up: unknown reason\n"); break;
+                    }   
+                    game_pick_up_rejected();
                     break;
                 }
                 case 0x2e: {
@@ -853,8 +864,6 @@ void net_poll()
                         int hue_id = read_uint16_be(&p, end);
 
                         gump_t *container = game_get_container(cont_serial);
-                        // TODO: don't use magic constant here
-                        assert(container->container.item_count < 256);
 
                         item_t *item = game_get_item(serial);
                         // item_id == 0 means just inited
@@ -867,8 +876,7 @@ void net_poll()
                         item->item_id = item_id;
                         item->hue_id = hue_id;
 
-                        container->container.items[container->container.item_count] = item;
-                        container->container.item_count += 1;
+                        container->container.items->push_back(item);
 
                         printf("adding item to container: %08x\n", serial);
                     }
@@ -1053,7 +1061,7 @@ void net_poll()
                     bool sa_client = (packet_len == client_70130_len + 2) || (packet_len == else_len + 2);
 
                     bool client_70130;
-                    client_70130 = packet_len == (client_70130_len + sa_client ? 2 : 0);
+                    client_70130 = packet_len == (client_70130_len + (sa_client ? 2 : 0));
 
                     printf("%d start cities:\n", city_count);
                     for (int i = 0; i < city_count; i++)
@@ -1140,7 +1148,7 @@ void net_poll()
                     int font_id = read_uint16_be(&p, end);
                     int cliloc_id = read_uint32_be(&p, end);
                     char speaker[31];
-                    speaker[31] = '\0';
+                    speaker[30] = '\0';
                     read_ascii_fixed(&p, end, speaker, 30);
 
                     // TODO: handle arguments
@@ -1261,6 +1269,7 @@ void net_init()
     packet_lengths[0x22] = 3; // move accept
     packet_lengths[0x24] = 7; // display container
     packet_lengths[0x25] = 21; // update container
+    packet_lengths[0x27] = 2; // reject pick up
     packet_lengths[0x2c] = 2; // death status
     packet_lengths[0x2e] = 15; // equip update
     packet_lengths[0x3a] = 0; // skills

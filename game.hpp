@@ -1,5 +1,6 @@
 
 #include <stdint.h>
+#include <list>
 
 struct mobile_t
 {
@@ -24,7 +25,6 @@ struct mobile_t
 // on the ground
 // being dragged by player
 // they need to be deleted properly regardless of which of these places they are
-
 const int SPACETYPE_WORLD = 0;
 const int SPACETYPE_CONTAINER = 1;
 const int SPACETYPE_EQUIPPED = 2;
@@ -69,8 +69,7 @@ struct gump_t
         struct
         {
             int gump_id;
-            int item_count;
-            item_t *items[256];
+            std::list<item_t *> *items;
         } container;
         struct
         {
@@ -89,4 +88,5 @@ void game_delete_object(uint32_t serial);
 void game_show_container(uint32_t item_serial, int gump_id);
 void game_show_paperdoll(mobile_t *m);
 gump_t *game_get_container(uint32_t item_serial);
+void game_pick_up_rejected();
 
