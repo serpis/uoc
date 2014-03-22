@@ -16,7 +16,11 @@ struct mobile_t
     // animation related stuff
     int last_dir;
     long last_movement;
-    int action_id;
+
+    long anim_start;
+    int anim_action_id;
+    int anim_frame_count;
+    int anim_total_frames;
 };
 
 // items can live in several places:
@@ -89,4 +93,5 @@ void game_show_container(uint32_t item_serial, int gump_id);
 void game_show_paperdoll(mobile_t *m);
 gump_t *game_get_container(uint32_t item_serial);
 void game_pick_up_rejected();
+void game_do_action(uint32_t mob_serial, int action_id, int frame_count, int repeat_count, bool forward, bool do_repeat, int frame_delay);
 

@@ -917,27 +917,15 @@ void net_poll()
                     break;
                 }
                 case 0x6e: {
-                    uint32_t mob_id = read_uint32_be(&p, end);
+                    uint32_t mob_serial = read_uint32_be(&p, end);
                     int action_id = read_uint16_be(&p, end);
-                    read_uint8(&p, end);
-                    int frame_count = read_uint8(&p, end);
-                    int repeat = read_uint16_be(&p, end);
-                    int backwards = read_uint8(&p, end);
-                    int repeat_flag_what_is_this = read_uint8(&p, end);
+                    int frame_count = read_uint16_be(&p, end);
+                    int repeat_count = read_uint16_be(&p, end);
+                    bool forward = !read_uint8(&p, end);
+                    bool do_repeat = read_uint8(&p, end) != 0;
                     int frame_delay = read_uint8(&p, end);
 
-                    if (action_id >= 35)
-                    {
-                        printf("ignoring animation with action_id %d (because it is >= 35, don't know how to handle)\n", action_id);
-                    }
-                    else
-                    {
-                        mobile_t *m = game_get_mobile(mob_id);
-                        m->action_id = action_id;
-
-
-                        printf("%8x (body: %d), do action %d\n", mob_id, m->body_id, action_id);
-                    }
+                    game_do_action(mob_serial, action_id, frame_count, repeat_count, forward, do_repeat, frame_delay);
                     break;
                 }
                 case 0x73: {

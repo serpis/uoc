@@ -1143,7 +1143,7 @@ void draw_world_item(int item_id, int x, int y, int z, int hue_id, int pick_id)
     }
 }
 
-void draw_world_anim(int body_id, int action, int direction, int x, int y, int z, int hue_id, int pick_id)
+void draw_world_anim(int body_id, int action, long action_start, int direction, int x, int y, int z, int hue_id, int pick_id)
 {
     int frame_count;
     bool flip = false;
@@ -1157,22 +1157,39 @@ void draw_world_anim(int body_id, int action, int direction, int x, int y, int z
     // TODO: this null check shouldn't be necessary
     if (frames)
     {
-        draw_world_anim_frame(&frames[(now / 200) % frame_count], flip, x, y, z, hue_id, pick_id);
+        draw_world_anim_frame(&frames[((now-action_start) / 200) % frame_count], flip, x, y, z, hue_id, pick_id);
     }
 }
 
 
 void draw_world_mobile(mobile_t *mobile, int pick_id)
 {
-    int action_id = mobile->action_id;
+    int action_id = mobile->anim_action_id;
+    long action_start = 0;
 
+    int frame_duration = 200;
+    if (mobile->anim_start + frame_duration*mobile->anim_total_frames < now)
+    {
+
+        mobile->anim_start = -1;
+    }
+    else
+    {
+        action_start = mobile->anim_start;
+    }
+
+    // no animation? do stand animation...
+    if (mobile->anim_start == -1)
+    {
+        action_id = 4;
+    }
     // mobiles' walk animation override current animation
     if (now - mobile->last_movement <= 500)
     {
         action_id = 0;
     }
 
-    draw_world_anim(mobile->body_id, action_id, mobile->dir, mobile->x, mobile->y, mobile->z, mobile->hue_id, pick_id);
+    draw_world_anim(mobile->body_id, action_id, action_start, mobile->dir, mobile->x, mobile->y, mobile->z, mobile->hue_id, pick_id);
     for (int i = 0; i < 32; i++)
     {
         int layer = layer_draw_order[i];
@@ -1185,7 +1202,7 @@ void draw_world_mobile(mobile_t *mobile, int pick_id)
             if (item_data->animation != 0)
             {
                 //printf("drawing anim for item_id %d (%s)\n", item_id, item_data->name);
-                draw_world_anim(item_data->animation, action_id, mobile->dir, mobile->x, mobile->y, mobile->z, hue_id, pick_id);
+                draw_world_anim(item_data->animation, action_id, action_start, mobile->dir, mobile->x, mobile->y, mobile->z, hue_id, pick_id);
             }
         }
     }
@@ -1306,7 +1323,7 @@ mobile_t *game_create_mobile(uint32_t serial)
     mobile_t *m = (mobile_t *)malloc(sizeof(mobile_t));
     memset(m, 0, sizeof(*m));
     m->serial = serial;
-    m->action_id = 4; // stand
+    m->anim_start = -1;
     mobiles[serial] = m;
     return m;
 }
@@ -1700,6 +1717,22 @@ void game_pick_up_rejected()
     if (dragging.type == DRAGTYPE_ITEM)
     {
         dragging.type = DRAGTYPE_NONE;
+    }
+}
+
+void game_do_action(uint32_t mob_serial, int action_id, int frame_count, int repeat_count, bool forward, bool do_repeat, int frame_delay)
+{
+    if (action_id >= 35)
+    {
+        printf("ignoring animation with action_id %d (because it is >= 35, don't know how to handle)\n", action_id);
+    }
+    else
+    {
+        mobile_t *m = game_get_mobile(mob_serial);
+        m->anim_start = now;
+        m->anim_action_id = action_id;
+        m->anim_frame_count = frame_count;
+        m->anim_total_frames = frame_count * (do_repeat ? repeat_count : 1);
     }
 }
 
