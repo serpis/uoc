@@ -947,6 +947,7 @@ mobile_t player =
     0, // dir
     0, // hue
     0, // noto
+    0, // flags
     NULL,
     {NULL}, // equipped items
     0, // last_dir
@@ -1181,12 +1182,26 @@ void draw_world_mobile(mobile_t *mobile, int pick_id)
     // no animation? do stand animation...
     if (mobile->anim_start == -1)
     {
-        action_id = 4;
+        if (mobile->flags & MOBFLAG_WARMODE)
+        {
+            action_id = 15;
+        }
+        else
+        {
+            action_id = 4;
+        }
     }
     // mobiles' walk animation override current animation
     if (now - mobile->last_movement <= 500)
     {
-        action_id = 0;
+        if (mobile->flags & MOBFLAG_WARMODE)
+        {
+            action_id = 7;
+        }
+        else
+        {
+            action_id = 0;
+        }
     }
 
     draw_world_anim(mobile->body_id, action_id, action_start, mobile->dir, mobile->x, mobile->y, mobile->z, mobile->hue_id, pick_id);

@@ -942,8 +942,7 @@ void net_poll()
                     m->z = read_sint8(&p, end);
                     m->dir = read_uint8(&p, end);
                     m->hue_id = read_uint16_be(&p, end);
-                    //printf("0x77: hue_id = %04x\n", m->hue_id);
-                    read_uint8(&p, end); // status.. TODO: what is this?
+                    m->flags = read_uint8(&p, end);
                     m->noto = read_uint8(&p, end);
                     break;
                 }
@@ -957,8 +956,7 @@ void net_poll()
                     m->z = read_sint8(&p, end);
                     m->dir = read_uint8(&p, end);
                     m->hue_id = read_uint16_be(&p, end);
-                    //printf("0x78: mob.hue_id = %04x\n", m->hue_id);
-                    read_uint8(&p, end); // status.. TODO: what is this?
+                    m->flags = read_uint8(&p, end);
                     m->noto = read_uint8(&p, end);
                     while (true)
                     {

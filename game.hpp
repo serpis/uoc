@@ -2,6 +2,8 @@
 #include <stdint.h>
 #include <list>
 
+const int MOBFLAG_WARMODE = 0x40;
+const int MOBFLAG_HIDDEN  = 0x80;
 struct mobile_t
 {
     uint32_t serial;
@@ -10,6 +12,7 @@ struct mobile_t
     int dir;
     int hue_id;
     int noto;
+    int flags;
     struct gump_t *paperdoll_gump;
     struct item_t *equipped_items[32];
 
