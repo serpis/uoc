@@ -97,15 +97,43 @@ struct ml_statics_block
     } statics[];
 };
 
+struct ml_font_metadata
+{
+    struct
+    {
+        int8_t kerning;
+        int8_t baseline;
+        int8_t width;
+        int8_t height;
+    } chars[0x10000];
+};
+
+struct ml_font
+{
+    struct
+    {
+        int offset_x;
+        int offset_y;
+        int width;
+        int height;
+        int map_start_x;
+        int map_start_y;
+    } chars[0x10000];
+    int map_width;
+    int map_height;
+    uint16_t map_data[];
+};
+
 void ml_init();
 
 
 // these return instantly, so there are no asynchronous versions of them
-// the data returned should NOT be freed!
+// the data returned is owned by the library and so should NOT be freed!
 ml_tile_data_entry *ml_get_tile_data(int tile_id);
 ml_item_data_entry *ml_get_item_data(int item_id);
 ml_hue             *ml_get_hue(int hue_id);
 const char         *ml_get_cliloc(int cliloc_id);
+ml_font_metadata   *ml_get_unicode_font_metadata(int font_id);
 
 // it is the caller's responsibility to free the memory returned from these
 ml_anim *ml_read_anim(int body_id, int action, int direction);
@@ -114,6 +142,7 @@ ml_art *ml_read_static_art(int item_id);
 ml_gump *ml_read_gump(int gump_id);
 ml_land_block *ml_read_land_block(int map, int block_x, int block_y);
 ml_statics_block *ml_read_statics_block(int map, int block_x, int block_y);
+ml_art *ml_render_string(int font_id, const char *s);
 
 
 

@@ -26,6 +26,9 @@ static ml_hue             *hues                  = NULL;
 static int                 cliloc_entry_count    = 0;
 static ml_cliloc_entry    *cliloc_entries        = NULL;
 
+static int                 font_metadata_count   = 0;
+static ml_font_metadata   *font_metadatas        = NULL;
+
 static ml_index           *anim_idx              = NULL;
 static ml_index           *art_idx               = NULL;
 static ml_index           *gump_idx              = NULL;
@@ -566,6 +569,233 @@ static void statics_block(int map, int offset, int length, ml_statics_block **sb
     file_unmap(p, end);
 }
 
+static void parse_unicode_font_metadata(const char *p, const char *end, ml_font_metadata *font_metadata)
+{
+    const char *start = p;
+
+    uint32_t char_data_start[0x10000];
+
+    for (int i = 0; i < 0x10000; i++)
+    {
+        char_data_start[i] = read_uint32_le(&p, end);
+        //printf("%d: %d\n", i, char_data_start[i]);
+    }
+
+    int max_width  = 0;
+    int max_height = 0;
+
+    int non_nulls = 0;
+
+    int total_pixels = 0;
+
+    for (int i = 0; i < 0x10000; i++)
+    {
+        p = start + char_data_start[i];
+        if (p == end) // special case for broken unifont3.mul...
+        {
+            p -= 4;
+        }
+
+        int kerning  = read_sint8(&p, end);
+        int baseline = read_sint8(&p, end);
+        int width    = read_sint8(&p, end);
+        int height   = read_sint8(&p, end);
+
+        if (width  > max_width ) max_width  = width ;
+        if (height > max_height) max_height = height;
+
+        font_metadata->chars[i].kerning  = kerning;
+        font_metadata->chars[i].baseline = baseline;
+        font_metadata->chars[i].width    = width;
+        font_metadata->chars[i].height   = height;
+
+        total_pixels += width * height;
+
+        if (char_data_start[i] != 0)
+        {
+            non_nulls += 1;
+        }
+    }
+
+    //printf("%d %d %d %d\n", non_nulls, total_pixels, max_width, max_height);
+
+}
+
+static void unicode_font_metadata(int font_id, ml_font_metadata *font_metadata)
+{
+    assert(font_id >= 0 && font_id <= 12);
+
+    char filename[128];
+
+    if (font_id == 0)
+    {
+        sprintf(filename, "files/unifont.mul");
+    }
+    else
+    {
+        sprintf(filename, "files/unifont%d.mul", font_id);
+    }
+
+
+    const char *end;
+    const char *p;
+    p = file_map(filename, &end);
+
+    parse_unicode_font_metadata(p, end, font_metadata);
+
+    file_unmap(p, end);
+}
+
+static void unicode_font_string_dimensions(int font_id, const char *s, int *width, int *height)
+{
+    ml_font_metadata *metadata = ml_get_unicode_font_metadata(font_id);
+
+    int str_len = strlen(s);
+
+    const int space_width = 3;
+
+    int total_width = 0;
+    int max_height = 0;
+
+    for (int i = 0; i < str_len; i++)
+    {
+        char c = s[i];
+
+        int kerning  = metadata->chars[c].kerning;
+        int baseline = metadata->chars[c].baseline;
+        int width    = metadata->chars[c].width;
+        int height   = metadata->chars[c].height;
+
+        if (c == ' ')
+        {
+            width = space_width;
+        }
+
+        total_width += width+1;
+        if (baseline+height > max_height)
+        {
+            max_height = baseline+height;
+        }
+    }
+
+    *width = total_width;
+    *height = max_height;
+}
+
+static void parse_render_unicode_font_string(const char *p, const char *end, int font_id, const char *s, ml_art **res)
+{
+    const char *start = p;
+
+    uint32_t char_data_start[0x10000];
+
+    for (int i = 0; i < 0x10000; i++)
+    {
+        char_data_start[i] = read_uint32_le(&p, end);
+    }
+
+    int str_len = strlen(s);
+
+    const int space_width = 3;
+
+    int art_width;
+    int art_height;
+
+    unicode_font_string_dimensions(font_id, s, &art_width, &art_height);
+
+    int art_size = sizeof(ml_art) + 2 * art_width * art_height;
+
+    *res = (ml_art *)malloc(art_size);
+
+    (*res)->width = art_width;
+    (*res)->height = art_height;
+
+    uint16_t *target_data = (*res)->data;
+    memset(target_data, 0, 2 * art_width * art_height);
+
+    int offset_x = 0;
+    for (int i = 0; i < str_len; i++)
+    {
+        char c = s[i];
+        p = start + char_data_start[c];
+        if (p == end) // special case for broken unifont3.mul...
+        {
+            p -= 4;
+        }
+
+        int kerning  = read_uint8(&p, end);
+        int baseline = read_uint8(&p, end);
+        int width    = read_uint8(&p, end);
+        int height   = read_uint8(&p, end);
+
+        // special handle space
+        if (c == ' ')
+        {
+            width = space_width;
+        }
+        else
+        {
+            for (int j = 0; j < art_height; j++)
+            {
+                uint16_t *w = target_data + offset_x + j * art_width;
+
+                if (j >= baseline && j < baseline + height)
+                {
+                    uint8_t raw_data;
+                    for (int x = 0; x < width; x++)
+                    {
+                        if ((x % 8) == 0)
+                        {
+                            raw_data = read_uint8(&p, end);
+                        }
+
+                        if (raw_data & 0x80)
+                        {
+                            *w++ = 0xffff;
+                        }
+                        else
+                        {
+                            *w++ = 0x0000;
+                        }
+
+
+                        raw_data <<= 1;
+                    }
+                }
+            }
+        }
+
+        printf("'%c' width: %d\n", c, width);
+
+        offset_x += width+1;
+    }
+
+    printf("total width, height: %d, %d\n", art_width, art_height);
+}
+
+static void render_unicode_font_string(int font_id, const char *s, ml_art **res)
+{
+    assert(font_id >= 0 && font_id <= 12);
+
+    char filename[128];
+
+    if (font_id == 0)
+    {
+        sprintf(filename, "files/unifont.mul");
+    }
+    else
+    {
+        sprintf(filename, "files/unifont%d.mul", font_id);
+    }
+
+    const char *end;
+    const char *p;
+    p = file_map(filename, &end);
+
+    parse_render_unicode_font_string(p, end, font_id, s, res);
+
+    file_unmap(p, end);
+}
+
 /*static void parse_bodyconv(const char *p, const char *end)
 {
     char line[128];
@@ -871,6 +1101,36 @@ static void read_cliloc()
 }
 
 
+ml_font_metadata *ml_get_unicode_font_metadata(int font_id)
+{
+    assert(ml_inited);
+
+    assert(font_id >= 0 && font_id < font_metadata_count);
+
+    return &font_metadatas[font_id];
+}
+
+static void read_unicode_font_metadata()
+{
+    assert(font_metadatas == NULL);
+
+    font_metadata_count = 13;
+    font_metadatas = (ml_font_metadata *)malloc(sizeof(ml_font_metadata) * font_metadata_count);
+
+    for (int i = 0; i < font_metadata_count; i++)
+    {
+        unicode_font_metadata(i, &font_metadatas[i]);
+    }
+
+    const char *end;
+    const char *p = file_map("files/Cliloc.enu", &end);
+
+    parse_cliloc(p, end);
+
+    file_unmap(p, end);
+}
+
+
 // see https://github.com/fdsprod/OpenUO/blob/master/OpenUO.Ultima.PresentationFramework/Adapters/AnimationImageSourceStorageAdapter.cs
 static int calc_anim_id(int anim_file, int body_id, int action, int direction)
 {
@@ -938,6 +1198,9 @@ void ml_init()
         ml_cliloc_entry *entry = &cliloc_entries[i];
         assert(strcmp(entry->s, ml_get_cliloc(entry->id)) == 0);
     }*/
+
+    printf("[ML]: Reading unicode font metadata...\n");
+    read_unicode_font_metadata();
 
     printf("[ML]: Reading indexes...\n");
 
@@ -1157,6 +1420,17 @@ ml_statics_block *ml_read_statics_block(int map, int block_x, int block_y)
 
         return sb;
     }
+}
+
+ml_art *ml_render_string(int font_id, const char *s)
+{
+    assert(ml_inited);
+
+    ml_art *res;
+
+    render_unicode_font_string(font_id, s, &res);
+
+    return res;
 }
 
 // threaded mullib

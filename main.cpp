@@ -1966,6 +1966,9 @@ int find_move_z(int map, int x, int y, int cur_z)
 int main()
 {
     ml_init();
+    //ml_art *s = ml_render_string(1, "hejsan du");
+    //dump_tga("str.tga", s->width, s->height, s->data);
+
     mlt_init();
     net_init();
     net_connect();
