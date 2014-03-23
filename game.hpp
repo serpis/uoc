@@ -62,10 +62,41 @@ struct item_t
     } loc;
 };
 
+const int GUMPWTYPE_PIC      = 0;
+const int GUMPWTYPE_PICTILED = 1;
+const int GUMPWTYPE_BUTTON   = 2;
+struct gump_widget_t
+{
+    int type;
+    union
+    {
+        struct
+        {
+            int x, y;
+            int gump_id;
+        } pic;
+        struct
+        {
+            int x, y;
+            int width, height;
+            int gump_id;
+        } pictiled;
+        struct
+        {
+            int x, y;
+            int up_gump_id, down_gump_id;
+            int type;
+            int param;
+            int button_id;
+        } button;
+    };
+};
+
 // gumps can be plain gumps, containers, paperdolls (and some more?)
-// figure out a way to model this...
+// is this a good way to model that?
 const int GUMPTYPE_CONTAINER = 0;
 const int GUMPTYPE_PAPERDOLL = 1;
+const int GUMPTYPE_GENERIC   = 2;
 struct gump_t
 {
     int type;
@@ -82,6 +113,11 @@ struct gump_t
         {
             mobile_t *mobile;
         } paperdoll;
+        struct
+        {
+            uint32_t serial;
+            std::list<gump_widget_t> *widgets;
+        } generic;
     };
 };
 
@@ -94,6 +130,7 @@ mobile_t *game_create_mobile(uint32_t serial);
 void game_delete_object(uint32_t serial);
 void game_show_container(uint32_t item_serial, int gump_id);
 void game_show_paperdoll(mobile_t *m);
+gump_t *game_create_generic_gump(uint32_t gump_serial, int x, int y);
 gump_t *game_get_container(uint32_t item_serial);
 void game_pick_up_rejected();
 void game_do_action(uint32_t mob_serial, int action_id, int frame_count, int repeat_count, bool forward, bool do_repeat, int frame_delay);

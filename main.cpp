@@ -1659,6 +1659,40 @@ void draw_gump(int gump_id, int x, int y, int hue_id, int pick_id)
     }
 }
 
+void draw_gump_tiled(int gump_id, int x, int y, int width, int height, int hue_id, int pick_id)
+{
+    pixel_storage_i *ps = get_gump_ps(gump_id);
+    // TODO: this null check shouldn't be necessary
+    if (ps)
+    {
+        for (int draw_y = y; draw_y < y + height; draw_y += ps->height)
+        for (int draw_x = x; draw_x < x + width ; draw_x += ps->width )
+        {
+            int draw_width  = std::min(x + width  - draw_x, ps->width);
+            int draw_height = std::min(y + height - draw_y, ps->height);
+
+            bool custom_size = (draw_width  != ps->width) ||
+                               (draw_height != ps->height);
+            if (custom_size)
+            {
+                pixel_storage_i temp_ps;
+                temp_ps.width  = draw_width;
+                temp_ps.height = draw_height;
+                temp_ps.tex    = ps->tex;
+                // TODO: should do something more clever with texture coords...
+                memcpy(temp_ps.tcxs, ps->tcxs, sizeof(temp_ps.tcxs));
+                memcpy(temp_ps.tcys, ps->tcys, sizeof(temp_ps.tcys));
+                blit_ps(&temp_ps, draw_x, draw_y, 0, hue_id, pick_id);
+            }
+            else
+            {
+                blit_ps(ps, draw_x, draw_y, 0, hue_id, pick_id);
+            }
+        }
+        //blit_ps_tiled(ps, x, y, width, height, 0, hue_id, pick_id);
+    }
+}
+
 void draw_paperdoll(gump_t *gump)
 {
 // <body-id> <paperdoll-gump-id> <offset for this body> <fallback offset>
@@ -1723,6 +1757,36 @@ void draw_container(gump_t *container)
     }
 }
 
+void draw_generic_gump(gump_t *gump)
+{
+    assert(gump->type == GUMPTYPE_GENERIC);
+    int x = gump->x;
+    int y = gump->y;
+
+    int pick_id = pick_gump(gump);
+
+    for (std::list<gump_widget_t>::iterator it = gump->generic.widgets->begin(); it != gump->generic.widgets->end(); ++it)
+    {
+        gump_widget_t widget = *it;
+        if (widget.type == GUMPWTYPE_PIC)
+        {
+            draw_gump(widget.pic.gump_id, x + widget.pic.x, y + widget.pic.y, 0, pick_id);
+        }
+        else if (widget.type == GUMPWTYPE_PICTILED)
+        {
+            draw_gump_tiled(widget.pictiled.gump_id, x + widget.pictiled.x, y + widget.pictiled.y, widget.pictiled.width, widget.pictiled.height, 0, pick_id);
+        }
+        else if (widget.type == GUMPWTYPE_BUTTON)
+        {
+            draw_gump(widget.button.up_gump_id, x + widget.button.x, y + widget.button.y, 0, pick_id);
+        }
+        else
+        {
+            assert(0 && "unhandled widget type");
+        }
+    }
+}
+
 void draw_gump(gump_t *gump)
 {
     switch (gump->type)
@@ -1732,6 +1796,9 @@ void draw_gump(gump_t *gump)
             break;
         case GUMPTYPE_PAPERDOLL:
             draw_paperdoll(gump);
+            break;
+        case GUMPTYPE_GENERIC:
+            draw_generic_gump(gump);
             break;
         default:
             printf("unknown gump type: %d\n", gump->type);
@@ -1762,6 +1829,19 @@ void game_do_action(uint32_t mob_serial, int action_id, int frame_count, int rep
         m->anim_frame_count = frame_count;
         m->anim_total_frames = frame_count * (do_repeat ? repeat_count : 1);
     }
+}
+
+gump_t *game_create_generic_gump(uint32_t gump_serial, int x, int y)
+{
+    gump_t *gump = (gump_t *)malloc(sizeof(gump_t));
+    gump->type = GUMPTYPE_GENERIC;
+    gump->x = x;
+    gump->y = y;
+    gump->generic.widgets = new std::list<gump_widget_t>;
+
+    gump_list.push_back(gump);
+
+    return gump;
 }
 
 int find_move_z(int map, int x, int y, int cur_z)
@@ -2155,8 +2235,8 @@ int main()
                                     break;
                                 case TYPE_STATIC:
                                 {
-                                    bool check_a = ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_STAIRS_A != 0;
-                                    bool check_b = ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_STAIRS_B != 0;
+                                    bool check_a = (ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_STAIRS_A) != 0;
+                                    bool check_b = (ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_STAIRS_B) != 0;
                                     printf("static at (%d, %d, %d), item_id: %d, surface: %d, impassable: %d, stairs: %d flags: %lx, ca: %d, cb: %d %lx\n",
                                             pick_target->static_item.x,
                                             pick_target->static_item.y,
@@ -2174,8 +2254,8 @@ int main()
                                 case TYPE_ITEM:
                                 {
                                     item_t *item = pick_target->item.item;
-                                    bool check_a = ml_get_item_data(item->item_id)->flags & TILEFLAG_STAIRS_A != 0;
-                                    bool check_b = ml_get_item_data(item->item_id)->flags & TILEFLAG_STAIRS_B != 0;
+                                    bool check_a = (ml_get_item_data(item->item_id)->flags & TILEFLAG_STAIRS_A) != 0;
+                                    bool check_b = (ml_get_item_data(item->item_id)->flags & TILEFLAG_STAIRS_B) != 0;
                                     printf("item at (%d, %d, %d), item_id: %d, surface: %d, impassable: %d, stairs: %d flags: %lx, ca: %d, cb: %d\n",
                                             item->loc.world.x,
                                             item->loc.world.y,
