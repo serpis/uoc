@@ -1,5 +1,6 @@
 #include <assert.h>
 #include <stdint.h>
+#include <string.h>
 
 void write_uint8(char **p, const char *end, uint8_t b)
 {
@@ -133,6 +134,14 @@ void read_ascii_fixed(const char **p, const char *end, char *s, int n)
     }
     // important: null terminate
     *s = '\0';
+}
+
+void read_chunk(const char **p, const char *end, char *buf, int len)
+{
+    int remaining_data = end - *p;
+    assert(remaining_data >= len);
+    memcpy(buf, *p, len);
+    *p += len;
 }
 
 void write_ascii_fixed(char **p, const char *end, const char *s, int n)

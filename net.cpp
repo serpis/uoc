@@ -8,6 +8,8 @@
 #include <sstream>
 #include <vector>
 
+#include <zlib.h>
+
 #include <stdint.h>
 
 #include <unistd.h>
@@ -1250,6 +1252,65 @@ void net_poll()
                     }
 
                     std::wcout << speaker << ": " << res << std::endl;
+
+                    break;
+                }
+                case 0xdd: {
+                    uint32_t serial = read_uint32_be(&p, end);
+                    uint32_t type = read_uint32_be(&p, end);
+                    int x = read_uint32_be(&p, end);
+                    int y = read_uint32_be(&p, end);
+
+                    unsigned long decompressed_layout_length;
+                    char *decompressed_layout_data;
+
+                    {
+                        int compressed_layout_length = read_sint32_be(&p, end)-4;
+                        printf("compressed_layout_length: %d\n", compressed_layout_length);
+                        decompressed_layout_length = read_sint32_be(&p, end);
+                        printf("decompressed_layout_length: %d\n", (int)decompressed_layout_length);
+
+                        char *compressed_layout_data = (char *)malloc(compressed_layout_length);
+                        read_chunk(&p, end, compressed_layout_data, compressed_layout_length);
+
+                        decompressed_layout_data = (char *)malloc(decompressed_layout_length);
+                        assert(uncompress((unsigned char *)decompressed_layout_data, &decompressed_layout_length,
+                                          (unsigned char *)compressed_layout_data  , compressed_layout_length) == Z_OK);
+
+                        printf("%s\n", decompressed_layout_data);
+
+                        free(compressed_layout_data);
+                    }
+
+                    unsigned long decompressed_text_length;
+                    char *decompressed_text_data;
+
+                    {
+                        int text_line_count = read_uint32_be(&p, end);
+
+                        int compressed_text_length = read_sint32_be(&p, end);
+
+                        if (compressed_text_length > 0)
+                        {
+                            decompressed_text_length = read_sint32_be(&p, end);
+
+                            char *compressed_text_data = (char *)malloc(compressed_text_length);
+                            decompressed_text_data = (char *)malloc(decompressed_text_length);
+                            read_chunk(&p, end, compressed_text_data, compressed_text_length);
+
+                            assert(uncompress((unsigned char *)decompressed_text_data, &decompressed_text_length,
+                                              (unsigned char *)compressed_text_data  , compressed_text_length) == Z_OK);
+
+                            free(compressed_text_data);
+                        }
+                        else
+                        {
+                            compressed_text_length = 0;
+                        }
+                    }
+
+                    free(decompressed_layout_data);
+                    free(decompressed_text_data);
 
                     break;
                 }
