@@ -83,6 +83,7 @@ struct gump_command_t
             int background;
             int scrollbar;
             int color;
+            std::wstring *arg_str;
         } localized;
     };
 };
@@ -182,7 +183,7 @@ static gump_command_t parse_gump_command(std::wstring command_str)
         std::wistringstream(tokens[6]) >> command.localized.background;
         std::wistringstream(tokens[7]) >> command.localized.scrollbar;
         std::wistringstream(tokens[8]) >> command.localized.color;
-        //command.localized.args = "";
+        command.localized.arg_str = new std::wstring;
     }
     else if (tokens[0] == L"xmfhtmltok")
     {
@@ -195,7 +196,8 @@ static gump_command_t parse_gump_command(std::wstring command_str)
         std::wistringstream(tokens[6]) >> command.localized.scrollbar;
         std::wistringstream(tokens[7]) >> command.localized.color;
         std::wistringstream(tokens[8]) >> command.localized.cliloc_id;
-        // TODO: take care of args?
+        command.localized.arg_str = new std::wstring;
+        *command.localized.arg_str = tokens[9];
     }
     else
     {
@@ -1531,8 +1533,21 @@ void net_poll()
                             }
                             else if (command.type == GUMPCMD_LOCALIZED)
                             {
-                                const char *s = ml_get_cliloc(command.localized.cliloc_id);
-                                printf("%s\n", s);
+                                std::wstring format = cstr_to_wstring(ml_get_cliloc(command.localized.cliloc_id));
+                                std::vector<std::wstring> args = split(*command.localized.arg_str, L'\t');
+                                // resolve any clilocs in argument list
+                                for (int i = 0; i < args.size(); i++)
+                                {
+                                    if (args[i][0] == L'#')
+                                    {
+                                        int arg_cliloc_id;
+                                        std::wistringstream(args[i].substr(1)) >> arg_cliloc_id;
+                                        args[i] = cstr_to_wstring(ml_get_cliloc(arg_cliloc_id));
+                                    }
+                                }
+                                std::wstring res = cliloc_format_resolve(format, args);
+                                std::wcout << res << std::endl;
+                                delete command.localized.arg_str;
                             }
                             else
                             {
