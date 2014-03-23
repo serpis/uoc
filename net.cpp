@@ -229,6 +229,71 @@ static std::list<gump_command_t> parse_gump_commands(std::wstring all_commands_s
     return commands;
 }
 
+static std::wstring cliloc_format_resolve(std::wstring format, std::vector<std::wstring> args)
+{
+    std::wstring res;
+    for (int i = 0; i < format.length(); i++)
+    {
+        if (format[i] == '~')
+        {
+            // arg substitution
+            long num_end = format.find('_', i+1);
+            if (num_end == std::wstring::npos)
+            {
+                num_end = format.length();
+            }
+            std::wstring num_str = format.substr(i+1, num_end-(i+1));
+
+            int arg_idx;
+            std::wistringstream(num_str) >> arg_idx;
+
+            // arguments are 1-indexed, but our array is 0-indexed
+            arg_idx -= 1;
+            assert(arg_idx >= 0 && arg_idx < args.size());
+
+            res += args[arg_idx];
+
+            // skip rest of arg in format string
+            long next_tilde = format.find('~', i+1);
+            if (next_tilde == std::wstring::npos)
+            {
+                next_tilde = format.length();
+            }
+            i = next_tilde;
+        }
+        else
+        {
+            res += format[i];
+        }
+    }
+
+    return res;
+}
+
+std::vector<std::wstring> split(std::wstring s, int delim)
+{
+    std::vector<std::wstring> args;
+    std::wstring arg;
+    for (std::wstring::iterator it = s.begin(); it != s.end(); ++it)
+    {
+        if (*it == delim)
+        {
+            args.push_back(arg);
+            arg = L"";
+        }
+        else
+        {
+            arg += *it;
+        }
+    }
+    if (arg.length() > 0)
+    {
+        args.push_back(arg);
+    }
+
+    return args;
+}
+
 static void *get_in_addr(struct sockaddr *sa)
 {
     if (sa->sa_family == AF_INET) {
@@ -1377,68 +1442,22 @@ void net_poll()
                     read_ascii_fixed(&p, end, speaker, 30);
 
                     std::wstring format = cstr_to_wstring(ml_get_cliloc(cliloc_id));
-                    std::vector<std::wstring> args;
-                    std::wstring arg;
+                    std::wstring arg_str;
                     while (true)
                     {
                         // yes, this is little-endian
                         int c = read_uint16_le(&p, end);
                         if (c == 0)
                         {
-                            if (arg.length() > 0)
-                            {
-                                args.push_back(arg);
-                            }
                             break;
                         }
-
-                        if (c == '\t')
-                        {
-                            args.push_back(arg);
-                            arg = L"";
-                        }
                         else
                         {
-                            arg += c;
+                            arg_str += c;
                         }
                     }
-
-                    std::wstring res;
-                    for (int i = 0; i < format.length(); i++)
-                    {
-                        if (format[i] == '~')
-                        {
-                            // arg substitution
-                            long num_end = format.find('_', i+1);
-                            if (num_end == std::wstring::npos)
-                            {
-                                num_end = format.length();
-                            }
-                            std::wstring num_str = format.substr(i+1, num_end-(i+1));
-
-                            int arg_idx;
-                            std::wistringstream(num_str) >> arg_idx;
-
-                            // arguments are 1-indexed, but our array is 0-indexed
-                            arg_idx -= 1;
-                            assert(arg_idx >= 0 && arg_idx < args.size());
-
-                            res += args[arg_idx];
-
-                            // skip rest of arg in format string
-                            long next_tilde = format.find('~', i+1);
-                            if (next_tilde == std::wstring::npos)
-                            {
-                                next_tilde = format.length();
-                            }
-                            i = next_tilde;
-                        }
-                        else
-                        {
-                            res += format[i];
-                        }
-                    }
-
+                    std::vector<std::wstring> args = split(arg_str, L'\t');
+                    std::wstring res = cliloc_format_resolve(format, args);
                     std::wcout << speaker << ": " << res << std::endl;
 
                     break;
