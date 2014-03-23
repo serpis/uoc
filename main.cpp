@@ -1375,7 +1375,9 @@ void game_delete_object(uint32_t serial)
         if (it != items.end())
         {
             item_t *item = it->second;
-            assert(item->space == SPACETYPE_WORLD || item->space == SPACETYPE_CONTAINER);
+            // TODO: fix these things:
+            // 1. if item is container, delete any gumps and items inside container
+            assert(item->space == SPACETYPE_WORLD || item->space == SPACETYPE_CONTAINER || item->space == SPACETYPE_EQUIPPED);
             assert(item->container_gump == NULL);
 
             if (item->space == SPACETYPE_CONTAINER)
@@ -1383,10 +1385,23 @@ void game_delete_object(uint32_t serial)
                 assert(item->loc.container.container->type == GUMPTYPE_CONTAINER);
                 item->loc.container.container->container.items->remove(item);
             }
-            // TODO: fix these things:
-            // 1. if item is in container, remove container's reference from there
-            // 2. if item is equipped, remove mobile's reference to it
-            // 3. if item is container, delete any gumps and items inside container
+            else if (item->space == SPACETYPE_EQUIPPED)
+            {
+                mobile_t *m = item->loc.equipped.mobile;
+
+                // TODO: use named constant instead of "32"
+                bool found = false;
+                for (int i = 0; i < 32; i++)
+                {
+                    if (m->equipped_items[i] == item)
+                    {
+                        m->equipped_items[i] = NULL;
+                        found = true;
+                        break;
+                    }
+                }
+                assert(found);
+            }
 
             free(item);
             items.erase(it);
