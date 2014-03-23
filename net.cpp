@@ -191,10 +191,10 @@ static gump_command_t parse_gump_command(std::wstring command_str)
         std::wistringstream(tokens[2]) >> command.localized.y;
         std::wistringstream(tokens[3]) >> command.localized.width;
         std::wistringstream(tokens[4]) >> command.localized.height;
-        std::wistringstream(tokens[5]) >> command.localized.cliloc_id;
-        std::wistringstream(tokens[6]) >> command.localized.background;
-        std::wistringstream(tokens[7]) >> command.localized.scrollbar;
-        std::wistringstream(tokens[8]) >> command.localized.color;
+        std::wistringstream(tokens[5]) >> command.localized.background;
+        std::wistringstream(tokens[6]) >> command.localized.scrollbar;
+        std::wistringstream(tokens[7]) >> command.localized.color;
+        std::wistringstream(tokens[8]) >> command.localized.cliloc_id;
         // TODO: take care of args?
     }
     else
@@ -1509,6 +1509,11 @@ void net_poll()
                                 widget.button.param = command.button.param;
                                 widget.button.button_id = command.button.button_id;
                                 gump->generic.widgets->push_back(widget);
+                            }
+                            else if (command.type == GUMPCMD_LOCALIZED)
+                            {
+                                const char *s = ml_get_cliloc(command.localized.cliloc_id);
+                                printf("%s\n", s);
                             }
                             else
                             {
