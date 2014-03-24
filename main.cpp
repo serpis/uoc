@@ -309,7 +309,7 @@ void dump_tga(const char *filename, int width, int height, void *argb1555_data)
 {
     uint16_t *data = (uint16_t *)argb1555_data;
     int size = width * height;
-    char header[] =
+    uint8_t header[] =
     {
         0,
         0,
@@ -319,10 +319,10 @@ void dump_tga(const char *filename, int width, int height, void *argb1555_data)
         0,
         0, 0,
         0, 0,
-        width & 0xff,
-        width >> 8,
-        height & 0xff,
-        height >> 8,
+        (uint8_t)(width & 0xff),
+        (uint8_t)(width >> 8),
+        (uint8_t)(height & 0xff),
+        (uint8_t)(height >> 8),
         24,
         0x20
     };
@@ -335,7 +335,7 @@ void dump_tga(const char *filename, int width, int height, void *argb1555_data)
         uint8_t r = (pixel >> 7) & 0xf8;
         uint8_t g = (pixel >> 2) & 0xf8;
         uint8_t b = (pixel << 3) & 0xf8;
-        char buf[4] = { r, g, b, a };
+        uint8_t buf[4] = { r, g, b, a };
         fwrite(buf, 3, 1, f);
     }
     fclose(f);
