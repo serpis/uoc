@@ -764,12 +764,12 @@ static void parse_render_unicode_font_string(const char *p, const char *end, int
             }
         }
 
-        printf("'%c' width: %d\n", c, width);
+        //printf("'%c' width: %d\n", c, width);
 
         offset_x += width+1;
     }
 
-    printf("total width, height: %d, %d\n", art_width, art_height);
+    //printf("total width, height: %d, %d\n", art_width, art_height);
 }
 
 static void render_unicode_font_string(int font_id, std::wstring s, ml_art **res)

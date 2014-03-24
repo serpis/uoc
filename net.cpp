@@ -495,7 +495,7 @@ void send_client_version_response(const char *v)
     char *end = p + sizeof(data);
     write_uint8(&p, end, 0xbd);
     write_uint16_be(&p, end, 3+len+1);
-    printf("%s len: %d\n", v, len);
+    //printf("%s len: %d\n", v, len);
     write_ascii_fixed(&p, end, v, len+1);
     //assert(p == end);
     send_packet(data, data + 3+len+1);
@@ -1022,7 +1022,7 @@ void net_poll()
                     read_uint8(&p, end);
                     int map_width = read_uint16_be(&p, end);
                     int map_height = read_uint16_be(&p, end);
-                    printf("map width: %d height: %d\n", map_width, map_height);
+                    //printf("map width: %d height: %d\n", map_width, map_height);
                     read_uint32_be(&p, end);
                     read_uint16_be(&p, end);
 
@@ -1285,7 +1285,7 @@ void net_poll()
                 case 0xa8: {
                     uint8_t sys_info = read_uint8(&p, end);
                     int server_count = read_uint16_be(&p, end);
-                    printf("%d servers:\n", server_count);
+                    //printf("%d servers:\n", server_count);
                     for (int i = 0; i < server_count; i++)
                     {
                         int index = read_uint16_be(&p, end);
@@ -1296,10 +1296,11 @@ void net_poll()
                         uint32_t ip = read_uint32_be(&p, end);
                         char ip_str[3*4+3+1];
                         sprintf(ip_str, "%d.%d.%d.%d", (ip >> 24), (ip >> 16) & 0xff, (ip >> 8) & 0xff, ip & 0xff);
-                        printf(" %s %s\n", name, ip_str);
+                        //printf(" %s %s\n", name, ip_str);
 
                         if (server_count == 1)
                         {
+                            printf("Only one server: %s. Connecting to it!\n", name);
                             // only 1 server? easy choice!
                             send_select_server(index);
                         }
@@ -1330,7 +1331,7 @@ void net_poll()
                 }
                 case 0xa9: {
                     int char_slot_count = read_uint8(&p, end);
-                    printf("%d chars slots:\n", char_slot_count);
+                    //printf("%d chars slots:\n", char_slot_count);
                     bool occupied_slots[10];
                     int char_count = 0;
                     for (int i = 0; i < char_slot_count; i++)
@@ -1344,9 +1345,9 @@ void net_poll()
                         {
                             char_count += 1;
                         }
-                        printf(" %d %s\n", occupied_slots[i], name);
+                        //printf(" %d %s\n", occupied_slots[i], name);
                     }
-                    printf("%d chars\n", char_count);
+                    //printf("%d chars\n", char_count);
                     int city_count = read_uint8(&p, end);
 
                     int client_70130_len = 11 + char_slot_count * 60 + city_count * 89;
@@ -1357,7 +1358,7 @@ void net_poll()
                     bool client_70130;
                     client_70130 = packet_len == (client_70130_len + (sa_client ? 2 : 0));
 
-                    printf("%d start cities:\n", city_count);
+                    //printf("%d start cities:\n", city_count);
                     for (int i = 0; i < city_count; i++)
                     {
                         if (client_70130)
@@ -1373,7 +1374,7 @@ void net_poll()
                             uint32_t map = read_uint32_be(&p, end);
                             uint32_t cliloc = read_uint32_be(&p, end);
                             uint32_t zero = read_uint32_be(&p, end);
-                            printf(" %d: %s\n", loc_id, name);
+                            //printf(" %d: %s\n", loc_id, name);
                         }
                         else
                         {
@@ -1382,7 +1383,7 @@ void net_poll()
                             char area[32];
                             read_ascii_fixed(&p, end, name, 31);
                             read_ascii_fixed(&p, end, area, 31);
-                            printf(" %d: %s\n", loc_id, name);
+                            //printf(" %d: %s\n", loc_id, name);
                         }
                     }
                     //printf("%d %d %d %d %d\n", packet_len, client_70130_len, else_len, (int)sa_client, (int)client_70130);
@@ -1395,7 +1396,7 @@ void net_poll()
 
                     if (char_count == 0)
                     {
-                        printf("WHAT AM I DOING\n");
+                        printf("No chars on this account... create one!\n");
                         // no chars... create one!
                         send_create_character();
                     }

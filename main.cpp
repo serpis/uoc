@@ -1320,7 +1320,7 @@ void draw_world_statics_block(int map, int block_x, int block_y)
 
 void game_set_player_serial(uint32_t serial)
 {
-    printf("player serial: %x\n", serial);
+    //printf("player serial: %x\n", serial);
     player.serial = serial;
 }
 
