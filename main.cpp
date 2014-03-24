@@ -1819,6 +1819,12 @@ void draw_container(gump_t *container)
     }
 }
 
+void draw_text(int x, int y, int font_id, std::wstring s, int pick_id)
+{
+    pixel_storage_i *ps = get_string_ps(font_id, s);
+    blit_ps(ps, x, y, 0, 0, pick_id);
+}
+
 void draw_generic_gump(gump_t *gump)
 {
     assert(gump->type == GUMPTYPE_GENERIC);
@@ -1841,6 +1847,10 @@ void draw_generic_gump(gump_t *gump)
         else if (widget.type == GUMPWTYPE_BUTTON)
         {
             draw_gump(widget.button.up_gump_id, x + widget.button.x, y + widget.button.y, 0, pick_id);
+        }
+        else if (widget.type == GUMPWTYPE_TEXT)
+        {
+            draw_text(x + widget.text.x, y + widget.text.y, widget.text.font_id, *widget.text.text, pick_id);
         }
         else
         {

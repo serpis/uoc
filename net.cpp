@@ -1536,9 +1536,10 @@ void net_poll()
                             }
                             else if (command.type == GUMPCMD_LOCALIZED)
                             {
-                                printf("%d\n", command.localized.cliloc_id);
+                                //printf("%d\n", command.localized.cliloc_id);
                                 std::wstring format = cstr_to_wstring(ml_get_cliloc(command.localized.cliloc_id));
                                 std::vector<std::wstring> args = split(*command.localized.arg_str, L'\t');
+                                delete command.localized.arg_str;
                                 // resolve any clilocs in argument list
                                 for (int i = 0; i < args.size(); i++)
                                 {
@@ -1549,9 +1550,14 @@ void net_poll()
                                         args[i] = cstr_to_wstring(ml_get_cliloc(arg_cliloc_id));
                                     }
                                 }
-                                std::wstring res = cliloc_format_resolve(format, args);
-                                std::wcout << res << std::endl;
-                                delete command.localized.arg_str;
+                                gump_widget_t widget;
+                                widget.type = GUMPWTYPE_TEXT;
+                                widget.text.x = command.localized.x;
+                                widget.text.y = command.localized.y;
+                                widget.text.font_id = 1;
+                                widget.text.text = new std::wstring();
+                                *widget.text.text = cliloc_format_resolve(format, args);
+                                gump->generic.widgets->push_back(widget);
                             }
                             else
                             {

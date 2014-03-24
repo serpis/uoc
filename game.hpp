@@ -65,6 +65,7 @@ struct item_t
 const int GUMPWTYPE_PIC      = 0;
 const int GUMPWTYPE_PICTILED = 1;
 const int GUMPWTYPE_BUTTON   = 2;
+const int GUMPWTYPE_TEXT     = 3;
 struct gump_widget_t
 {
     int type;
@@ -89,6 +90,12 @@ struct gump_widget_t
             int param;
             int button_id;
         } button;
+        struct
+        {
+            int x, y;
+            int font_id;
+            std::wstring *text;
+        } text;
     };
 };
 
