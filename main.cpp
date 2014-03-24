@@ -879,7 +879,7 @@ pixel_storage_i *get_string_ps(int font_id, std::wstring str)
         string_cache.entries[str] = entry;
         it = string_cache.entries.find(str);
 
-        std::wcout << "string_cache       : loading " << str << std::endl;
+        //std::wcout << "string_cache       : loading " << str << std::endl;
 
         //mlt_read_string(font_id, str, write_string_ps);
         write_string_ps(font_id, str, ml_render_string(font_id, str));

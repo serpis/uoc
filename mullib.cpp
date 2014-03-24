@@ -659,7 +659,8 @@ static void unicode_font_string_dimensions(int font_id, std::wstring s, int *wid
 
     for (int i = 0; i < str_len; i++)
     {
-        char c = s[i];
+        wchar_t c = s[i];
+        assert(c >= 0 && c < 0x10000);
 
         int kerning  = metadata->chars[c].kerning;
         int baseline = metadata->chars[c].baseline;
@@ -715,7 +716,8 @@ static void parse_render_unicode_font_string(const char *p, const char *end, int
     int offset_x = 0;
     for (int i = 0; i < str_len; i++)
     {
-        char c = s[i];
+        wchar_t c = s[i];
+        assert(c >= 0 && c < 0x10000);
         p = start + char_data_start[c];
         if (p == end) // special case for broken unifont3.mul...
         {

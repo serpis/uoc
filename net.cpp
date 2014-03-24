@@ -29,7 +29,62 @@ static bool enable_compression = false;
 
 static int compress(char *dst, const char *dst_end, const char *src, const char *src_end);
 
-static std::wstring cstr_to_wstring(const char *s)
+int decode_one_utf8(const char *s, int *used_octets)
+{
+    if (*s == 0)
+    {
+        *used_octets = 0;
+        return 0;
+    }
+    else if (s[0] & 0x80) // highest bit set?
+    {
+        int rem_octs;
+        int build;
+        if ((s[0] & 0x20) == 0) // 2 octets
+        {
+            rem_octs = 1;
+            build = s[0] & 0x1f;
+        }
+        else if ((s[0] & 0x10) == 0) // 3 octets
+        {
+            rem_octs = 2;
+            build = s[0] & 0xf;
+        }
+        else // if ((s[0] & 0x8) == 0) // 4 octets
+        {
+            rem_octs = 3;
+            build = s[0] & 0x7;
+        }
+        *used_octets = rem_octs + 1;
+
+        int i = 0;
+        while (rem_octs-- > 0)
+        {
+            i++;
+            build = (build << 6) | (s[i] & 0x3f);
+        }
+        return build;
+    }
+    else
+    {
+        *used_octets = 1;
+        return s[0];
+    }
+}
+
+static std::wstring decode_utf8_cstr(const char *s)
+{
+    std::wstring res;
+    while (*s)
+    {
+        int used;
+        res += decode_one_utf8(s, &used);
+        s += used;
+    }
+    return res;
+}
+
+/*static std::wstring cstr_to_wstring(const char *s)
 {
     const char *p = s;
     std::wstring ws;
@@ -39,7 +94,7 @@ static std::wstring cstr_to_wstring(const char *s)
         p++;
     }
     return ws;
-}
+}*/
 
 const int GUMPCMD_NOCLOSE   = 0;
 const int GUMPCMD_PAGE      = 1;
@@ -1446,7 +1501,7 @@ void net_poll()
                     speaker[30] = '\0';
                     read_ascii_fixed(&p, end, speaker, 30);
 
-                    std::wstring format = cstr_to_wstring(ml_get_cliloc(cliloc_id));
+                    std::wstring format = decode_utf8_cstr(ml_get_cliloc(cliloc_id));
                     std::wstring arg_str;
                     while (true)
                     {
@@ -1489,13 +1544,14 @@ void net_poll()
                         assert(uncompress((unsigned char *)decompressed_layout_data, &decompressed_layout_length,
                                           (unsigned char *)compressed_layout_data  , compressed_layout_length) == Z_OK);
 
-                        std::wstring all_commands_str = cstr_to_wstring(decompressed_layout_data);
+                        std::wstring all_commands_str = decode_utf8_cstr(decompressed_layout_data);
                         std::list<gump_command_t> commands = parse_gump_commands(all_commands_str);
                         printf("commands: %d\n", (int)commands.size());
 
                         free(compressed_layout_data);
                         free(decompressed_layout_data);
 
+                        int current_page = 0;
 
                         gump_t *gump = game_create_generic_gump(serial, x, y);
                         for (std::list<gump_command_t>::iterator it = commands.begin(); it != commands.end(); ++it)
@@ -1504,6 +1560,7 @@ void net_poll()
                             if (command.type == GUMPCMD_PIC)
                             {
                                 gump_widget_t widget;
+                                widget.page = current_page;
                                 widget.type = GUMPWTYPE_PIC;
                                 widget.pic.x = command.pic.x;
                                 widget.pic.y = command.pic.y;
@@ -1513,6 +1570,7 @@ void net_poll()
                             else if (command.type == GUMPCMD_PICTILED)
                             {
                                 gump_widget_t widget;
+                                widget.page = current_page;
                                 widget.type = GUMPWTYPE_PICTILED;
                                 widget.pictiled.x = command.pictiled.x;
                                 widget.pictiled.y = command.pictiled.y;
@@ -1524,6 +1582,7 @@ void net_poll()
                             else if (command.type == GUMPCMD_BUTTON)
                             {
                                 gump_widget_t widget;
+                                widget.page = current_page;
                                 widget.type = GUMPWTYPE_BUTTON;
                                 widget.button.x = command.button.x;
                                 widget.button.y = command.button.y;
@@ -1537,7 +1596,8 @@ void net_poll()
                             else if (command.type == GUMPCMD_LOCALIZED)
                             {
                                 //printf("%d\n", command.localized.cliloc_id);
-                                std::wstring format = cstr_to_wstring(ml_get_cliloc(command.localized.cliloc_id));
+                                //printf("%s\n", ml_get_cliloc(command.localized.cliloc_id));
+                                std::wstring format = decode_utf8_cstr(ml_get_cliloc(command.localized.cliloc_id));
                                 std::vector<std::wstring> args = split(*command.localized.arg_str, L'\t');
                                 delete command.localized.arg_str;
                                 // resolve any clilocs in argument list
@@ -1547,10 +1607,12 @@ void net_poll()
                                     {
                                         int arg_cliloc_id;
                                         std::wistringstream(args[i].substr(1)) >> arg_cliloc_id;
-                                        args[i] = cstr_to_wstring(ml_get_cliloc(arg_cliloc_id));
+                                        args[i] = decode_utf8_cstr(ml_get_cliloc(arg_cliloc_id));
+                                        //args[i] = cstr_to_wstring(ml_get_cliloc(arg_cliloc_id));
                                     }
                                 }
                                 gump_widget_t widget;
+                                widget.page = current_page;
                                 widget.type = GUMPWTYPE_TEXT;
                                 widget.text.x = command.localized.x;
                                 widget.text.y = command.localized.y;

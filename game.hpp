@@ -68,6 +68,7 @@ const int GUMPWTYPE_BUTTON   = 2;
 const int GUMPWTYPE_TEXT     = 3;
 struct gump_widget_t
 {
+    int page;
     int type;
     union
     {
