@@ -1836,25 +1836,28 @@ void draw_generic_gump(gump_t *gump)
     for (std::list<gump_widget_t>::iterator it = gump->generic.widgets->begin(); it != gump->generic.widgets->end(); ++it)
     {
         gump_widget_t widget = *it;
-        if (widget.type == GUMPWTYPE_PIC)
+        if (widget.page == 0 || widget.page == gump->generic.current_page)
         {
-            draw_gump(widget.pic.gump_id, x + widget.pic.x, y + widget.pic.y, 0, pick_id);
-        }
-        else if (widget.type == GUMPWTYPE_PICTILED)
-        {
-            draw_gump_tiled(widget.pictiled.gump_id, x + widget.pictiled.x, y + widget.pictiled.y, widget.pictiled.width, widget.pictiled.height, 0, pick_id);
-        }
-        else if (widget.type == GUMPWTYPE_BUTTON)
-        {
-            draw_gump(widget.button.up_gump_id, x + widget.button.x, y + widget.button.y, 0, pick_id);
-        }
-        else if (widget.type == GUMPWTYPE_TEXT)
-        {
-            draw_text(x + widget.text.x, y + widget.text.y, widget.text.font_id, *widget.text.text, pick_id);
-        }
-        else
-        {
-            assert(0 && "unhandled widget type");
+            if (widget.type == GUMPWTYPE_PIC)
+            {
+                draw_gump(widget.pic.gump_id, x + widget.pic.x, y + widget.pic.y, 0, pick_id);
+            }
+            else if (widget.type == GUMPWTYPE_PICTILED)
+            {
+                draw_gump_tiled(widget.pictiled.gump_id, x + widget.pictiled.x, y + widget.pictiled.y, widget.pictiled.width, widget.pictiled.height, 0, pick_id);
+            }
+            else if (widget.type == GUMPWTYPE_BUTTON)
+            {
+                draw_gump(widget.button.up_gump_id, x + widget.button.x, y + widget.button.y, 0, pick_id);
+            }
+            else if (widget.type == GUMPWTYPE_TEXT)
+            {
+                draw_text(x + widget.text.x, y + widget.text.y, widget.text.font_id, *widget.text.text, pick_id);
+            }
+            else
+            {
+                assert(0 && "unhandled widget type");
+            }
         }
     }
 }
@@ -1909,6 +1912,8 @@ gump_t *game_create_generic_gump(uint32_t gump_serial, int x, int y)
     gump->type = GUMPTYPE_GENERIC;
     gump->x = x;
     gump->y = y;
+    gump->generic.serial = gump_serial;
+    gump->generic.current_page = 1;
     gump->generic.widgets = new std::list<gump_widget_t>;
 
     gump_list.push_back(gump);

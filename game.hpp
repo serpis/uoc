@@ -124,6 +124,7 @@ struct gump_t
         struct
         {
             uint32_t serial;
+            int current_page;
             std::list<gump_widget_t> *widgets;
         } generic;
     };

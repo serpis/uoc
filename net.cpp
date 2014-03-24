@@ -1554,7 +1554,11 @@ void net_poll()
                         for (std::list<gump_command_t>::iterator it = commands.begin(); it != commands.end(); ++it)
                         {
                             gump_command_t command = *it;
-                            if (command.type == GUMPCMD_PIC)
+                            if (command.type == GUMPCMD_PAGE)
+                            {
+                                current_page = command.page.page_no;
+                            }
+                            else if (command.type == GUMPCMD_PIC)
                             {
                                 gump_widget_t widget;
                                 widget.page = current_page;
