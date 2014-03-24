@@ -29,7 +29,7 @@ static bool enable_compression = false;
 
 static int compress(char *dst, const char *dst_end, const char *src, const char *src_end);
 
-int decode_one_utf8(const char *s, int *used_octets)
+static int decode_one_utf8(const char *s, int *used_octets)
 {
     assert(s[0] != 0);
     if (s[0] & 0x80) // highest bit set?
@@ -326,7 +326,7 @@ static std::wstring cliloc_format_resolve(std::wstring format, std::vector<std::
     return res;
 }
 
-std::vector<std::wstring> split(std::wstring s, int delim)
+static std::vector<std::wstring> split(std::wstring s, int delim)
 {
     std::vector<std::wstring> args;
     std::wstring arg;
@@ -348,6 +348,53 @@ std::vector<std::wstring> split(std::wstring s, int delim)
     }
 
     return args;
+}
+
+static std::list<std::wstring> massage_text(int font_id, int width, std::wstring s)
+{
+    std::vector<std::wstring> words = split(s, ' ');
+
+    int space_width;
+    int space_height;
+    ml_get_font_string_dimensions(font_id, L" ", &space_width, &space_height);
+
+    std::list<std::wstring> strs;
+
+    int w = 0;
+
+    std::wstring building;
+    for (std::vector<std::wstring>::iterator it = words.begin(); it != words.end(); ++it)
+    {
+        int word_width, word_height;
+        ml_get_font_string_dimensions(font_id, *it, &word_width, &word_height);
+
+        if (w == 0)
+        {
+            building = *it;
+            w = word_width;
+        }
+        else
+        {
+            if (w + space_width + word_width > width)
+            {
+                strs.push_back(building);
+                building = *it;
+                w = word_width;
+            }
+            else
+            {
+                building += L" ";
+                building += *it;
+                w += space_width + word_width;
+            }
+        }
+    }
+    if (building.size() > 0)
+    {
+        strs.push_back(building);
+    }
+
+    return strs;
 }
 
 static void *get_in_addr(struct sockaddr *sa)
@@ -1612,15 +1659,25 @@ void net_poll()
                                         //args[i] = cstr_to_wstring(ml_get_cliloc(arg_cliloc_id));
                                     }
                                 }
-                                gump_widget_t widget;
-                                widget.page = current_page;
-                                widget.type = GUMPWTYPE_TEXT;
-                                widget.text.x = command.localized.x;
-                                widget.text.y = command.localized.y;
-                                widget.text.font_id = 1;
-                                widget.text.text = new std::wstring();
-                                *widget.text.text = cliloc_format_resolve(format, args);
-                                gump->generic.widgets->push_back(widget);
+                                std::wstring res = cliloc_format_resolve(format, args);
+                                int font_id = 1;
+                                std::list<std::wstring> strs = massage_text(font_id, command.localized.width, res);
+                                int y = command.localized.y;
+                                int line_height = 20;
+                                for (std::list<std::wstring>::iterator it = strs.begin(); it != strs.end(); ++it)
+                                {
+                                    gump_widget_t widget;
+                                    widget.page = current_page;
+                                    widget.type = GUMPWTYPE_TEXT;
+                                    widget.text.x = command.localized.x;
+                                    widget.text.y = y;
+                                    widget.text.font_id = font_id;
+                                    widget.text.text = new std::wstring();
+                                    *widget.text.text = *it;
+                                    gump->generic.widgets->push_back(widget);
+
+                                    y += line_height;
+                                }
                             }
                             else
                             {

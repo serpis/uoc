@@ -646,8 +646,10 @@ static void unicode_font_metadata(int font_id, ml_font_metadata *font_metadata)
     file_unmap(p, end);
 }
 
-static void unicode_font_string_dimensions(int font_id, std::wstring s, int *width, int *height)
+void ml_get_font_string_dimensions(int font_id, std::wstring s, int *width, int *height)
 {
+    assert(ml_inited);
+
     ml_font_metadata *metadata = ml_get_unicode_font_metadata(font_id);
 
     int str_len = s.length();
@@ -701,7 +703,7 @@ static void parse_render_unicode_font_string(const char *p, const char *end, int
     int art_width;
     int art_height;
 
-    unicode_font_string_dimensions(font_id, s, &art_width, &art_height);
+    ml_get_font_string_dimensions(font_id, s, &art_width, &art_height);
 
     int art_size = sizeof(ml_art) + 2 * art_width * art_height;
 

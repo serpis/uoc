@@ -128,6 +128,7 @@ struct ml_font
 
 void ml_init();
 
+void ml_get_font_string_dimensions(int font_id, std::wstring s, int *width, int *height);
 
 // these return instantly, so there are no asynchronous versions of them
 // the data returned is owned by the library and so should NOT be freed!
