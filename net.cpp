@@ -92,6 +92,8 @@ static gump_command_t parse_gump_command(std::wstring command_str)
 {
     gump_command_t command;
 
+    std::wcout << command_str << std::endl;
+
     std::vector<std::wstring> tokens;
 
     // first split str into tokens
@@ -1533,6 +1535,7 @@ void net_poll()
                             }
                             else if (command.type == GUMPCMD_LOCALIZED)
                             {
+                                printf("%d\n", command.localized.cliloc_id);
                                 std::wstring format = cstr_to_wstring(ml_get_cliloc(command.localized.cliloc_id));
                                 std::vector<std::wstring> args = split(*command.localized.arg_str, L'\t');
                                 // resolve any clilocs in argument list

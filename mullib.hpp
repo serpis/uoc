@@ -1,6 +1,8 @@
 #ifndef _MULLIB_HPP
 #define _MULLIB_HPP
 
+#include <string>
+
 const uint64_t TILEFLAG_IMPASSABLE = 0x00000040;
 const uint64_t TILEFLAG_SURFACE    = 0x00000200;
 const uint64_t TILEFLAG_BRIDGE     = 0x00000400;
@@ -142,7 +144,7 @@ ml_art *ml_read_static_art(int item_id);
 ml_gump *ml_read_gump(int gump_id);
 ml_land_block *ml_read_land_block(int map, int block_x, int block_y);
 ml_statics_block *ml_read_statics_block(int map, int block_x, int block_y);
-ml_art *ml_render_string(int font_id, const char *s);
+ml_art *ml_render_string(int font_id, std::wstring s);
 
 
 

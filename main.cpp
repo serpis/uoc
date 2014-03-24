@@ -6,6 +6,8 @@
 
 #include <map>
 #include <list>
+#include <string>
+#include <iostream>
 
 #include "net.hpp"
 #include "mullib.hpp"
@@ -549,6 +551,16 @@ static struct
     } entries[8 * 8];
 } statics_block_cache;
 
+struct string_cache_entry_t
+{
+    bool fetching;
+    pixel_storage_i ps;
+};
+static struct
+{
+    std::map<std::wstring, string_cache_entry_t> entries;
+} string_cache;
+
 unsigned int get_hue_tex(int hue_id)
 {
     assert(hue_id > 0 && hue_id < 8*375);
@@ -848,6 +860,41 @@ statics_block_t *get_statics_block(int map, int block_x, int block_y)
         return &statics_block_cache.entries[cache_block_index].statics_block;
     }
 }
+
+void write_string_ps(int font_id, std::wstring str, ml_art *a)
+{
+    string_cache.entries[str].ps = upload_tex2d(a->width, a->height, a->data);
+    free(a);
+
+    string_cache.entries[str].fetching = false;
+}
+
+pixel_storage_i *get_string_ps(int font_id, std::wstring str)
+{
+    std::map<std::wstring, string_cache_entry_t>::iterator it = string_cache.entries.find(str);
+    if (it == string_cache.entries.end())
+    {
+        string_cache_entry_t entry;
+        entry.fetching = true;
+        string_cache.entries[str] = entry;
+        it = string_cache.entries.find(str);
+
+        std::wcout << "string_cache       : loading " << str << std::endl;
+
+        //mlt_read_string(font_id, str, write_string_ps);
+        write_string_ps(font_id, str, ml_render_string(font_id, str));
+    }
+
+    if (it->second.fetching)
+    {
+        return NULL;
+    }
+    else
+    {
+        return &it->second.ps;
+    }
+}
+
 
 
 void render(pixel_storage_i *ps, int xs[4], int ys[4], int draw_prio, int hue_id, int pick_id)
@@ -1966,8 +2013,8 @@ int find_move_z(int map, int x, int y, int cur_z)
 int main()
 {
     ml_init();
-    //ml_art *s = ml_render_string(1, "hejsan du");
-    //dump_tga("str.tga", s->width, s->height, s->data);
+    ml_art *s = ml_render_string(1, L"hejsan du");
+    dump_tga("str.tga", s->width, s->height, s->data);
 
     mlt_init();
     net_init();
@@ -2484,6 +2531,15 @@ int main()
         {
             net_send_ping();
             next_ping += ping_frequency;
+        }
+
+        // draw some strings
+        {
+            //ml_art *str = ml_render_string(1, L"hejsan du~");
+            //piI//xel_storage_i ps = upload_tex2d(str->width, str->height, str->data);
+            //free(str);
+            pixel_storage_i *ps = get_string_ps(1, L"hejsan du~");
+            blit_ps(ps, 0, 0, 0, 0, -1);
         }
 
         // network...

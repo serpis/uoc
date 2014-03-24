@@ -646,11 +646,11 @@ static void unicode_font_metadata(int font_id, ml_font_metadata *font_metadata)
     file_unmap(p, end);
 }
 
-static void unicode_font_string_dimensions(int font_id, const char *s, int *width, int *height)
+static void unicode_font_string_dimensions(int font_id, std::wstring s, int *width, int *height)
 {
     ml_font_metadata *metadata = ml_get_unicode_font_metadata(font_id);
 
-    int str_len = strlen(s);
+    int str_len = s.length();
 
     const int space_width = 3;
 
@@ -682,7 +682,7 @@ static void unicode_font_string_dimensions(int font_id, const char *s, int *widt
     *height = max_height;
 }
 
-static void parse_render_unicode_font_string(const char *p, const char *end, int font_id, const char *s, ml_art **res)
+static void parse_render_unicode_font_string(const char *p, const char *end, int font_id, std::wstring s, ml_art **res)
 {
     const char *start = p;
 
@@ -693,7 +693,7 @@ static void parse_render_unicode_font_string(const char *p, const char *end, int
         char_data_start[i] = read_uint32_le(&p, end);
     }
 
-    int str_len = strlen(s);
+    int str_len = s.length();
 
     const int space_width = 3;
 
@@ -772,7 +772,7 @@ static void parse_render_unicode_font_string(const char *p, const char *end, int
     printf("total width, height: %d, %d\n", art_width, art_height);
 }
 
-static void render_unicode_font_string(int font_id, const char *s, ml_art **res)
+static void render_unicode_font_string(int font_id, std::wstring s, ml_art **res)
 {
     assert(font_id >= 0 && font_id <= 12);
 
@@ -1422,7 +1422,7 @@ ml_statics_block *ml_read_statics_block(int map, int block_x, int block_y)
     }
 }
 
-ml_art *ml_render_string(int font_id, const char *s)
+ml_art *ml_render_string(int font_id, std::wstring s)
 {
     assert(ml_inited);
 
