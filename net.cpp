@@ -31,12 +31,8 @@ static int compress(char *dst, const char *dst_end, const char *src, const char 
 
 int decode_one_utf8(const char *s, int *used_octets)
 {
-    if (*s == 0)
-    {
-        *used_octets = 0;
-        return 0;
-    }
-    else if (s[0] & 0x80) // highest bit set?
+    assert(s[0] != 0);
+    if (s[0] & 0x80) // highest bit set?
     {
         int rem_octs;
         int build;
@@ -61,6 +57,7 @@ int decode_one_utf8(const char *s, int *used_octets)
         while (rem_octs-- > 0)
         {
             i++;
+            assert(s[i] != 0);
             build = (build << 6) | (s[i] & 0x3f);
         }
         return build;
