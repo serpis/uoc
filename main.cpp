@@ -2023,8 +2023,6 @@ int find_move_z(int map, int x, int y, int cur_z)
 int main()
 {
     ml_init();
-    ml_art *s = ml_render_string(1, L"hejsan du");
-    dump_tga("str.tga", s->width, s->height, s->data);
 
     mlt_init();
     net_init();
@@ -2541,15 +2539,6 @@ int main()
         {
             net_send_ping();
             next_ping += ping_frequency;
-        }
-
-        // draw some strings
-        {
-            //ml_art *str = ml_render_string(1, L"hejsan du~");
-            //piI//xel_storage_i ps = upload_tex2d(str->width, str->height, str->data);
-            //free(str);
-            pixel_storage_i *ps = get_string_ps(1, L"hejsan du~");
-            blit_ps(ps, 0, 0, 0, 0, -1);
         }
 
         // network...
