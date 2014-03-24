@@ -4,6 +4,7 @@
 
 #include <stdint.h>
 
+#include <algorithm>
 #include <map>
 #include <list>
 #include <string>
@@ -36,11 +37,12 @@
 
 const int ping_frequency = 30000;
 
-const int TYPE_LAND      = 0;
-const int TYPE_STATIC    = 1;
-const int TYPE_ITEM      = 2;
-const int TYPE_MOBILE    = 3;
-const int TYPE_GUMP      = 4;
+const int TYPE_LAND        = 0;
+const int TYPE_STATIC      = 1;
+const int TYPE_ITEM        = 2;
+const int TYPE_MOBILE      = 3;
+const int TYPE_GUMP        = 4;
+const int TYPE_GUMP_WIDGET = 5;
 
 const int window_width = 800;
 const int window_height = 600;
@@ -72,6 +74,11 @@ struct pick_target_t
         {
             gump_t *gump;
         } gump;
+        struct
+        {
+            gump_t *gump;
+            gump_widget_t *widget;
+        } gump_widget;
     };
 };
 static pick_target_t pick_slots[0x10000];
@@ -172,6 +179,19 @@ int pick_gump(gump_t *gump)
     assert(next_pick_id < sizeof(pick_slots)/sizeof(pick_slots[0]));
     pick_slots[next_pick_id].type = TYPE_GUMP;
     pick_slots[next_pick_id].gump.gump = gump;
+    return next_pick_id++;
+}
+
+int pick_gump_widget(gump_t *gump, gump_widget_t *widget)
+{
+    if (!picking_enabled)
+    {
+        return -1;
+    }
+    assert(next_pick_id < sizeof(pick_slots)/sizeof(pick_slots[0]));
+    pick_slots[next_pick_id].type = TYPE_GUMP_WIDGET;
+    pick_slots[next_pick_id].gump_widget.gump = gump;
+    pick_slots[next_pick_id].gump_widget.widget = widget;
     return next_pick_id++;
 }
 
@@ -1403,6 +1423,104 @@ mobile_t *game_create_mobile(uint32_t serial)
     return m;
 }
 
+// the three functions:
+//  game_delete_mobile
+//  game_delete_item
+//  game_delete_gump
+// are tightly aware of eachother's inner workings
+// and cooperate to clean up all traces of objects and their children
+// this cleaning up including removing objects from the global lists and
+// freeing any dynamically allocated objects
+void game_delete_mobile(mobile_t *mobile)
+{
+    // TODO: delete all equipped items, gumps etc
+
+    std::map<int, mobile_t *>::iterator it = mobiles.find(mobile->serial);
+    assert(it != mobiles.end());
+    assert(it->second == mobile);
+    mobiles.erase(it);
+
+    free(mobile);
+}
+
+void game_delete_item(item_t *item)
+{
+    // TODO: fix these things:
+    // 1. if item is container, delete any gumps and items inside container
+    assert(item->space == SPACETYPE_WORLD || item->space == SPACETYPE_CONTAINER || item->space == SPACETYPE_EQUIPPED);
+    assert(item->container_gump == NULL);
+
+    if (item->space == SPACETYPE_CONTAINER)
+    {
+        assert(item->loc.container.container->type == GUMPTYPE_CONTAINER);
+        item->loc.container.container->container.items->remove(item);
+    }
+    else if (item->space == SPACETYPE_EQUIPPED)
+    {
+        mobile_t *m = item->loc.equipped.mobile;
+
+        // TODO: use named constant instead of "32"
+        bool found = false;
+        for (int i = 0; i < 32; i++)
+        {
+            if (m->equipped_items[i] == item)
+            {
+                m->equipped_items[i] = NULL;
+                found = true;
+                break;
+            }
+        }
+        assert(found);
+    }
+
+    std::map<int, item_t *>::iterator it = items.find(item->serial);
+    assert(it != items.end());
+    assert(it->second == item);
+    items.erase(it);
+
+    free(item);
+}
+
+void game_delete_gump(gump_t *gump)
+{
+
+    if (gump->type == GUMPTYPE_CONTAINER)
+    {
+        // delete all contained items
+        for (std::list<item_t *>::iterator it = gump->container.items->begin(); it != gump->container.items->end(); ++it)
+        {
+            item_t *item = *it;
+            game_delete_item(item);
+        }
+        delete gump->container.items;
+        gump->container.item->container_gump = NULL;
+    }
+    else if (gump->type == GUMPTYPE_GENERIC)
+    {
+        // delete all contained widgets
+        for (std::list<gump_widget_t>::iterator it = gump->generic.widgets->begin(); it != gump->generic.widgets->end(); ++it)
+        {
+            gump_widget_t &widget = *it;
+            // TEXT widget needs to delete contained string
+            if (widget.type == GUMPWTYPE_TEXT)
+            {
+                delete widget.text.text;
+            }
+        }
+        delete gump->generic.widgets;
+    }
+    else
+    {
+        assert(0 && "don't know how to delete this kind of gump");
+    }
+
+    std::list<gump_t *>::iterator it = std::find(gump_list.begin(), gump_list.end(), gump);
+    assert(it != gump_list.end());
+    gump_list.erase(it);
+
+    free(gump);
+}
+
 void game_delete_object(uint32_t serial)
 {
     // delete mobile
@@ -1410,10 +1528,7 @@ void game_delete_object(uint32_t serial)
         std::map<int, mobile_t *>::iterator it = mobiles.find(serial);
         if (it != mobiles.end())
         {
-            // TODO: delete all equipped items, gumps etc
-
-            free(it->second);
-            mobiles.erase(it);
+            game_delete_mobile(it->second);
         }
     }
     // delete item
@@ -1421,40 +1536,11 @@ void game_delete_object(uint32_t serial)
         std::map<int, item_t *>::iterator it = items.find(serial);
         if (it != items.end())
         {
-            item_t *item = it->second;
-            // TODO: fix these things:
-            // 1. if item is container, delete any gumps and items inside container
-            assert(item->space == SPACETYPE_WORLD || item->space == SPACETYPE_CONTAINER || item->space == SPACETYPE_EQUIPPED);
-            assert(item->container_gump == NULL);
-
-            if (item->space == SPACETYPE_CONTAINER)
-            {
-                assert(item->loc.container.container->type == GUMPTYPE_CONTAINER);
-                item->loc.container.container->container.items->remove(item);
-            }
-            else if (item->space == SPACETYPE_EQUIPPED)
-            {
-                mobile_t *m = item->loc.equipped.mobile;
-
-                // TODO: use named constant instead of "32"
-                bool found = false;
-                for (int i = 0; i < 32; i++)
-                {
-                    if (m->equipped_items[i] == item)
-                    {
-                        m->equipped_items[i] = NULL;
-                        found = true;
-                        break;
-                    }
-                }
-                assert(found);
-            }
-
-            free(item);
-            items.erase(it);
+            game_delete_item(it->second);
         }
     }
 }
+
 
 void game_show_container(uint32_t item_serial, int gump_id)
 {
@@ -1835,7 +1921,7 @@ void draw_generic_gump(gump_t *gump)
 
     for (std::list<gump_widget_t>::iterator it = gump->generic.widgets->begin(); it != gump->generic.widgets->end(); ++it)
     {
-        gump_widget_t widget = *it;
+        gump_widget_t &widget = *it;
         if (widget.page == 0 || widget.page == gump->generic.current_page)
         {
             if (widget.type == GUMPWTYPE_PIC)
@@ -1848,7 +1934,7 @@ void draw_generic_gump(gump_t *gump)
             }
             else if (widget.type == GUMPWTYPE_BUTTON)
             {
-                draw_gump(widget.button.up_gump_id, x + widget.button.x, y + widget.button.y, 0, pick_id);
+                draw_gump(widget.button.up_gump_id, x + widget.button.x, y + widget.button.y, 0, pick_gump_widget(gump, &widget));
             }
             else if (widget.type == GUMPWTYPE_TEXT)
             {
@@ -2186,6 +2272,9 @@ int main()
                     case TYPE_GUMP:
                         //printf("gump\n");
                         break;
+                    case TYPE_GUMP_WIDGET:
+                        //printf("gump\n");
+                        break;
                     default:
                         printf("unknown item picked :O\n");
                         break;
@@ -2347,6 +2436,29 @@ int main()
                                             check_a, check_b);
                                     break;
                                 }
+                                case TYPE_GUMP_WIDGET:
+                                {
+                                    gump_t *gump = pick_target->gump_widget.gump;
+                                    gump_widget_t *widget = pick_target->gump_widget.widget;
+                                    assert(gump->type == GUMPTYPE_GENERIC);
+                                    assert(widget->type == GUMPWTYPE_BUTTON);
+                
+                                    // handle button click!
+                                    if (widget->button.type == 0)
+                                    {
+                                        // change page
+                                        gump->generic.current_page = widget->button.param;
+                                    }
+                                    else
+                                    {
+                                        // send response
+                                        net_send_gump_response(gump->generic.serial, widget->button.button_id);
+                                        game_delete_gump(gump);
+                                        pick_target = NULL;
+                                    }
+
+                                    break;
+                                }
                             }
                         }
                         last_click = now;
@@ -2497,6 +2609,9 @@ int main()
                         break;
                     case TYPE_GUMP:
                         //printf("inspecting gump... O_o\n");
+                        break;
+                    case TYPE_GUMP_WIDGET:
+                        //printf("gump\n");
                         break;
                     default:
                         printf("unknown item picked :O\n");

@@ -681,6 +681,24 @@ void net_send_drop_item(uint32_t item_serial, int x, int y, int z, uint32_t cont
     send_packet(data, end);
 }
 
+void net_send_gump_response(uint32_t serial, int response_id)
+{
+    char data[12];
+    char *p = data;
+    char *end = p + sizeof(data);
+    write_uint8(&p, end, 0xbf); // extended
+    write_uint16_be(&p, end, 12);
+
+    printf("sending response to gump %08x: %d\n", serial, response_id);
+
+    write_uint8(&p, end, 0x04); // gump_response
+    write_uint32_be(&p, end, serial);
+    write_uint32_be(&p, end, response_id);
+
+    assert(p == end);
+    send_packet(data, end);
+}
+
 extern int huffman_tree[256][2];
 
 void find_parent(int n, int *from, int *bit)
@@ -1568,7 +1586,7 @@ void net_poll()
                 }
                 case 0xdd: {
                     uint32_t serial = read_uint32_be(&p, end);
-                    uint32_t type = read_uint32_be(&p, end);
+                    uint32_t huhwhatsthis = read_uint32_be(&p, end);
                     int x = read_uint32_be(&p, end);
                     int y = read_uint32_be(&p, end);
 
