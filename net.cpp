@@ -683,15 +683,15 @@ void net_send_drop_item(uint32_t item_serial, int x, int y, int z, uint32_t cont
 
 void net_send_gump_response(uint32_t serial, int response_id)
 {
-    char data[12];
+    char data[13];
     char *p = data;
     char *end = p + sizeof(data);
     write_uint8(&p, end, 0xbf); // extended
-    write_uint16_be(&p, end, 12);
+    write_uint16_be(&p, end, 13);
 
     printf("sending response to gump %08x: %d\n", serial, response_id);
 
-    write_uint8(&p, end, 0x04); // gump_response
+    write_uint16_be(&p, end, 0x04); // gump_response
     write_uint32_be(&p, end, serial);
     write_uint32_be(&p, end, response_id);
 
@@ -1724,7 +1724,10 @@ void net_poll()
                             assert(uncompress((unsigned char *)decompressed_text_data, &decompressed_text_length,
                                               (unsigned char *)compressed_text_data  , compressed_text_length) == Z_OK);
 
+                            // TODO: do something with decompressed text data
+
                             free(compressed_text_data);
+                            free(decompressed_text_data);
                         }
                         else
                         {
@@ -1732,7 +1735,6 @@ void net_poll()
                         }
                     }
 
-                    free(decompressed_text_data);
 
                     break;
                 }

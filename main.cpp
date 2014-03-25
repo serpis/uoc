@@ -2415,7 +2415,7 @@ int main()
                                              (ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_STAIRS_B ) != 0),
                                             (long unsigned int)ml_get_item_data(pick_target->static_item.item_id)->flags,
                                             check_a, check_b,
-                                            ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_STAIRS_B);
+                                            (long unsigned int)(ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_STAIRS_B));
                                     break;
                                 }
                                 case TYPE_ITEM:
