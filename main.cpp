@@ -1992,13 +1992,14 @@ void game_do_action(uint32_t mob_serial, int action_id, int frame_count, int rep
     }
 }
 
-gump_t *game_create_generic_gump(uint32_t gump_serial, int x, int y)
+gump_t *game_create_generic_gump(uint32_t gump_serial, uint32_t gump_type_id, int x, int y)
 {
     gump_t *gump = (gump_t *)malloc(sizeof(gump_t));
     gump->type = GUMPTYPE_GENERIC;
     gump->x = x;
     gump->y = y;
     gump->generic.serial = gump_serial;
+    gump->generic.type_id = gump_type_id;
     gump->generic.current_page = 1;
     gump->generic.widgets = new std::list<gump_widget_t>;
 
@@ -2452,7 +2453,7 @@ int main()
                                     else
                                     {
                                         // send response
-                                        net_send_gump_response(gump->generic.serial, widget->button.button_id);
+                                        net_send_gump_response(gump->generic.serial, gump->generic.type_id, widget->button.button_id);
                                         game_delete_gump(gump);
                                         pick_target = NULL;
                                     }

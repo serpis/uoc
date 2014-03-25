@@ -124,6 +124,7 @@ struct gump_t
         struct
         {
             uint32_t serial;
+            uint32_t type_id;
             int current_page;
             std::list<gump_widget_t> *widgets;
         } generic;
@@ -139,7 +140,7 @@ mobile_t *game_create_mobile(uint32_t serial);
 void game_delete_object(uint32_t serial);
 void game_show_container(uint32_t item_serial, int gump_id);
 void game_show_paperdoll(mobile_t *m);
-gump_t *game_create_generic_gump(uint32_t gump_serial, int x, int y);
+gump_t *game_create_generic_gump(uint32_t gump_serial, uint32_t gump_type_id, int x, int y);
 gump_t *game_get_container(uint32_t item_serial);
 void game_pick_up_rejected();
 void game_do_action(uint32_t mob_serial, int action_id, int frame_count, int repeat_count, bool forward, bool do_repeat, int frame_delay);

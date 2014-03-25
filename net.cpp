@@ -681,22 +681,30 @@ void net_send_drop_item(uint32_t item_serial, int x, int y, int z, uint32_t cont
     send_packet(data, end);
 }
 
-void net_send_gump_response(uint32_t serial, int response_id)
+void net_send_gump_response(uint32_t serial, uint32_t gump_type_id, int response_id)
 {
-    char data[13];
+    char data[128];
     char *p = data;
     char *end = p + sizeof(data);
-    write_uint8(&p, end, 0xbf); // extended
-    write_uint16_be(&p, end, 13);
+    write_uint8(&p, end, 0xb1);
+    char *lenp = p;
+    write_uint16_be(&p, end, 0); // reserve length field
 
-    printf("sending response to gump %08x: %d\n", serial, response_id);
+    printf("sending response to gump %08x, %08x: %d\n", serial, gump_type_id, response_id);
 
-    write_uint16_be(&p, end, 0x04); // gump_response
     write_uint32_be(&p, end, serial);
+    write_uint32_be(&p, end, gump_type_id);
     write_uint32_be(&p, end, response_id);
 
-    assert(p == end);
-    send_packet(data, end);
+    write_uint32_be(&p, end, 0); // switch count
+
+    write_uint32_be(&p, end, 0); // text count
+
+    // fill in length
+    int length = p - data;
+    write_uint16_be(&lenp, end, length);
+
+    send_packet(data, p);
 }
 
 extern int huffman_tree[256][2];
@@ -1586,7 +1594,7 @@ void net_poll()
                 }
                 case 0xdd: {
                     uint32_t serial = read_uint32_be(&p, end);
-                    uint32_t huhwhatsthis = read_uint32_be(&p, end);
+                    uint32_t gump_type_id = read_uint32_be(&p, end);
                     int x = read_uint32_be(&p, end);
                     int y = read_uint32_be(&p, end);
 
@@ -1615,7 +1623,7 @@ void net_poll()
 
                         int current_page = 0;
 
-                        gump_t *gump = game_create_generic_gump(serial, x, y);
+                        gump_t *gump = game_create_generic_gump(serial, gump_type_id, x, y);
                         for (std::list<gump_command_t>::iterator it = commands.begin(); it != commands.end(); ++it)
                         {
                             gump_command_t command = *it;
