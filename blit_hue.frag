@@ -12,11 +12,10 @@ void main()
     int idx = int(15.0*grey);
     if (idx >= 0 && idx < 32)
     {
-        vec2 lookup_start = tex_coords_hue.xz;
-        vec2 lookup_end   = tex_coords_hue.yz;
-        vec2 lookup = (lookup_start, lookup_end, grey);
+        float lookup_x = mix(tex_coords_hue.x, tex_coords_hue.y, grey);
+        float lookup_y = tex_coords_hue.z;
 
-        texColor.rgb = texture2D(tex_hue, lookup).rgb;
+        texColor.rgb = texture2D(tex_hue, vec2(lookup_x, lookup_y)).rgb;
     }
     else
     {

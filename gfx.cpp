@@ -1,5 +1,7 @@
 #include <cassert>
 
+#include <list>
+
 #include "file.hpp"
 #include "gfx.hpp"
 
@@ -51,9 +53,20 @@ static bool is_2pot(int n)
     return n && ((n & (n - 1)) == 0);
 }
 
+static int log2(int n)
+{
+    assert(is_2pot(n));
+    int highest_bit = 0;
+    while (n)
+    {
+        highest_bit += 1;
+        n >>= 1;
+    }
+    return highest_bit;
+}
+
 static int round_up_to_2pot(int n)
 {
-    assert(n > 0);
     if (is_2pot(n)) 
     {
         return n;
@@ -71,32 +84,139 @@ static int round_up_to_2pot(int n)
 }
 
 
-
-pixel_storage_t gfx_upload_tex2d(int width, int height, void *data)
+struct atlas_slot_t
 {
-    int texture_width;
-    int texture_height;
+    bool valid;
+};
 
-    if (0)
-    {
-        int width_2pot = round_up_to_2pot(width);
-        int height_2pot = round_up_to_2pot(height);
-        printf("uploading (%d, %d) -> %dx%d atlas.\n", width, height, width_2pot, height_2pot);
-        texture_width = width_2pot;
-        texture_height = height_2pot;
-    }
-    else
-    {
-        texture_width = width;
-        texture_height = height;
-    }
+struct atlas_t
+{
+    unsigned int tex;
+    int width, height;
+    int slot_width, slot_height;
+    int slots_x, slots_y;
+    int slot_count;
+
+    atlas_slot_t slots[];
+};
+
+atlas_t *create_empty_atlas(int width, int height, int slot_width, int slot_height)
+{
+    // make sure proper dimensions are specified
+    assert((width % slot_width) == 0);
+    assert((height % slot_height) == 0);
+
+    unsigned int tex;
+    glGenTextures(1, &tex);
+    glBindTexture(GL_TEXTURE_2D, tex);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, width, width, 0, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
 
     check_gl_error(__LINE__);
 
-    unsigned int tex;
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+    int slots_x = width / slot_width;
+    int slots_y = height / slot_height;
 
-    glGenTextures(1, &tex);
+    int slot_count = slots_x * slots_y;
+
+    atlas_t *atlas = (atlas_t *)malloc(sizeof(atlas_t) + slot_count * sizeof(atlas_slot_t));
+
+    atlas->tex = tex;
+    atlas->width = width;
+    atlas->height = height;
+    atlas->slot_width = slot_width;
+    atlas->slot_height = slot_height;
+    atlas->slots_x = slots_x;
+    atlas->slots_y = slots_y;
+    atlas->slot_count = slot_count;
+
+    for (int i = 0; i < slot_count; i++)
+    {
+        atlas->slots[i].valid = false;
+    }
+
+    return atlas;
+}
+
+std::list<atlas_t *> atlases;
+
+void dump_tga(const char *filename, int width, int height, void *argb1555_data);
+
+void find_atlas_slot(int req_width, int req_height, atlas_t **atlas, int *slot_x, int *slot_y)
+{
+    int slot_width  = round_up_to_2pot(req_width);
+    int slot_height = round_up_to_2pot(req_height);
+
+    // make tiny things use a 32x32 slot, hopefully this improves atlas utilization
+    if (slot_width < 32)
+    {
+        slot_width = 32;
+    }
+    if (slot_height < 32 && slot_height != 1)
+    {
+        slot_height = 32;
+    }
+
+    //printf("slot_width, slot_height: %d %d\n", slot_width, slot_height);
+
+    // first look for an empty slot in existing atlases
+    for (std::list<atlas_t *>::iterator it = atlases.begin(); it != atlases.end(); ++it)
+    {
+        atlas_t *a = *it;
+
+        if (a->slot_width == slot_width && a->slot_height == slot_height)
+        {
+            int slot_count = a->slot_count;
+
+            for (int i = 0; i < slot_count; i++)
+            {
+                if (!a->slots[i].valid)
+                {
+                    // found one!
+                    *atlas = a;
+                    *slot_x = i % a->slots_x;
+                    *slot_y = i / a->slots_x;
+                    a->slots[i].valid = true;
+                    //printf("found a slot in an atlas: %d %d\n", *slot_x, *slot_y);
+                    return;
+                }
+            }
+        }
+    }
+
+    // no free slot found, create a new atlas!
+    {
+        int width = 1024;
+        int height = 1024;
+        assert(slot_width < width);
+        assert(slot_height < height);
+        atlas_t *a = create_empty_atlas(width, height, slot_width, slot_height);
+        atlases.push_back(a);
+
+        *atlas = a;
+        *slot_x = 0;
+        *slot_y = 0;
+        a->slots[0].valid = true;
+        //printf("no slot found, created an atlas for slot size %d %d, w, h: %d %d, slots: %d\n", slot_width, slot_height, a->width, a->height, a->slot_count);
+    }
+}
+
+pixel_storage_t gfx_upload_tex2d(int width, int height, void *data)
+{
+    atlas_t *atlas;
+    int slot_x, slot_y;
+
+    find_atlas_slot(width, height, &atlas, &slot_x, &slot_y);
+
+    check_gl_error(__LINE__);
+
+    //unsigned int tex;
+
+    /*glGenTextures(1, &tex);
     glBindTexture(GL_TEXTURE_2D, tex);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
@@ -104,25 +224,42 @@ pixel_storage_t gfx_upload_tex2d(int width, int height, void *data)
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture_width, texture_height, 0, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, 0);
     glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, data);
+    glBindTexture(GL_TEXTURE_2D, 0);*/
+
+    check_gl_error(__LINE__);
+
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
+    glBindTexture(GL_TEXTURE_2D, atlas->tex);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, slot_x * atlas->slot_width, slot_y * atlas->slot_height, width, height, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, data);
     glBindTexture(GL_TEXTURE_2D, 0);
 
     if (check_gl_error(__LINE__))
     {
-        printf("error uploading 2d texture w, h: %d, %d\n", texture_width, texture_height);
+        printf("error uploading 2d texture w, h: %d, %d\n", width, height);
     }
 
     pixel_storage_t ps;
     ps.width = width;
     ps.height = height;
-    ps.tex = tex;
-    ps.tcxs[0] = 0.0f;
+    ps.tex = atlas->tex;
+    // the small tex offsets are necessary to prevent sampling outside of this atlas slot
+    ps.tcxs[0] = (slot_x * atlas->slot_width  +      0 + 0.1f) / (float)atlas->width ;
+    ps.tcxs[1] = (slot_x * atlas->slot_width  +  width - 0.1f) / (float)atlas->width ;
+    ps.tcxs[2] = (slot_x * atlas->slot_width  +  width - 0.1f) / (float)atlas->width ;
+    ps.tcxs[3] = (slot_x * atlas->slot_width  +      0 + 0.1f) / (float)atlas->width ;
+    ps.tcys[0] = (slot_y * atlas->slot_height +      0 + 0.1f) / (float)atlas->height;
+    ps.tcys[1] = (slot_y * atlas->slot_height +      0 + 0.1f) / (float)atlas->height;
+    ps.tcys[2] = (slot_y * atlas->slot_height + height - 0.1f) / (float)atlas->height;
+    ps.tcys[3] = (slot_y * atlas->slot_height + height - 0.1f) / (float)atlas->height;
+    /*ps.tcxs[0] = 0.0f;
     ps.tcxs[1] = width / (float)texture_width;
     ps.tcxs[2] = width / (float)texture_width;
     ps.tcxs[3] = 0.0f;
     ps.tcys[0] = 0.0f;
     ps.tcys[1] = 0.0f;
     ps.tcys[2] = height / (float)texture_height;
-    ps.tcys[3] = height / (float)texture_height;
+    ps.tcys[3] = height / (float)texture_height;*/
+
     return ps;
 }
 
@@ -236,7 +373,7 @@ void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hu
         bool only_grey = (hue_id & 0x8000) == 0;
         float tex_coords_hue[3] = { ps_hue.tcxs[0], ps_hue.tcxs[1], ps_hue.tcys[0] };
         glUniform1i(glGetUniformLocation(prg_blit_hue, "tex_hue"), 1);
-        glUniform3fv(glGetUniformLocation(prg_blit_hue, "tex_coords_hue"), 1, tex_coords_hue);
+        glUniform3f(glGetUniformLocation(prg_blit_hue, "tex_coords_hue"), ps_hue.tcxs[0], ps_hue.tcxs[1], ps_hue.tcys[0]);//0.0, 1.0, 0.0);
     }
     check_gl_error(__LINE__);
 
