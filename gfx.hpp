@@ -16,6 +16,8 @@ int gfx_upload_program(const char *vert_filename, const char *frag_filename);
 
 void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hue_id, int pick_id);
 
+void gfx_flush();
+
 
 #endif
 

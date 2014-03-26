@@ -1944,6 +1944,7 @@ int main()
         glScissor(mouse_x, inverted_mouse_y, 1, 1);
         glEnable(GL_SCISSOR_TEST);
         draw_world();
+        gfx_flush();
         glClear(GL_DEPTH_BUFFER_BIT);
         // draw gumps
         {
@@ -1954,6 +1955,7 @@ int main()
                 draw_gump(gump);
             }
         }
+        gfx_flush();
         //draw_paperdoll(&player, 0, 0, pick_gump());
         glDisable(GL_SCISSOR_TEST);
         glScissor(0, 0, window_width, window_height);
@@ -2019,6 +2021,7 @@ int main()
 
         picking_enabled = false;
         draw_world();
+        gfx_flush();
 
         glClear(GL_DEPTH_BUFFER_BIT);
         // draw gumps
@@ -2039,6 +2042,8 @@ int main()
 
             draw_screen_item(item_id, mouse_x, mouse_y, hue_id, -1);
         }
+
+        gfx_flush();
 
 
         // the rest of the logic is done after drawing, so that it can make use of the picking done in drawing stage
