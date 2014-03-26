@@ -14,6 +14,7 @@
 #include "mullib.hpp"
 #include "game.hpp"
 #include "file.hpp"
+#include "gfx.hpp"
 
 #ifdef _LINUX
 
@@ -44,8 +45,8 @@ const int TYPE_MOBILE      = 3;
 const int TYPE_GUMP        = 4;
 const int TYPE_GUMP_WIDGET = 5;
 
-const int window_width = 800;
-const int window_height = 600;
+int window_width = 800;
+int window_height = 600;
 
 struct pick_target_t
 {
@@ -231,100 +232,6 @@ void checkSDLError(int line = -1)
 #endif
 }
 
-bool checkGLError(int line = -1)
-{
-    GLenum err;
-    bool found_error = false;
-    while ((err = glGetError()) != GL_NO_ERROR)
-    {
-        printf("GL Error: %d %s\n", err, gluErrorString(err));
-		if (line != -1)
-			printf(" + line: %i\n", line);
-        found_error = true;
-    }
-    return found_error;
-}
-
-int gfx_compile_shader(const char *name, int type, const char *src, const char *end)
-{
-    int shader = glCreateShader(type);
-    int length = end - src;
-    glShaderSource(shader, 1, &src, &length);
-    checkGLError(__LINE__);
-    glCompileShader(shader);
-
-    int compiled_ok;
-    glGetShaderiv(shader, GL_COMPILE_STATUS, &compiled_ok);
-    if (!compiled_ok)
-    {
-        int log_length;
-        glGetShaderiv(shader, GL_INFO_LOG_LENGTH , &log_length);
-        if (log_length > 0)
-        {
-            char *log = (char *)malloc(log_length);
-            int hmz;
-            glGetShaderInfoLog(shader, log_length, &hmz, log);
-            printf("%d %d\n", hmz, log_length);
-            printf("Error compiling '%s':\n%s", name, log);
-            // TODO: more graceful?
-            exit(-1);
-            free(log);
-        }
-
-        return -1;
-    }
-    return shader;
-}
-
-int gfx_link_program(const char *name, int shader0, int shader1)
-{
-    int program = glCreateProgram();
-    glAttachShader(program, shader0);
-    glAttachShader(program, shader1);
-    glLinkProgram(program);
-
-    int linked_ok;
-    glGetProgramiv(program, GL_LINK_STATUS, &linked_ok);
-    if (!linked_ok)
-    {
-        int log_length;
-        glGetProgramiv(program, GL_INFO_LOG_LENGTH , &log_length);
-        if (log_length > 0)
-        {
-            char *log = (char *)malloc(log_length+1);
-            int hmz;
-            glGetProgramInfoLog(program, log_length, &hmz, log);
-            assert(hmz == log_length);
-            printf("Error linking '%s':\n%s\n", name, log);
-            // TODO: more graceful?
-            exit(-1);
-            free(log);
-        }
-
-        return -1;
-    }
-    return program;
-}
-
-int gfx_upload_program(const char *vert_filename, const char *frag_filename)
-{
-    const char *vert_src_end;
-    const char *vert_src = file_map(vert_filename, &vert_src_end);
-    const char *frag_src_end;
-    const char *frag_src = file_map(frag_filename, &frag_src_end);
-
-    int s0 = gfx_compile_shader(vert_filename, GL_VERTEX_SHADER, vert_src, vert_src_end);
-    int s1 = gfx_compile_shader(frag_filename, GL_FRAGMENT_SHADER, frag_src, frag_src_end);
-
-    file_unmap(vert_src, vert_src_end);
-    file_unmap(frag_src, frag_src_end);
-
-    char program_name[1024];
-    sprintf(program_name, "program <%s> <%s>", vert_filename, frag_filename);
-
-    return gfx_link_program(program_name, s0, s1);
-}
-
 void dump_tga(const char *filename, int width, int height, void *argb1555_data)
 {
     uint16_t *data = (uint16_t *)argb1555_data;
@@ -361,117 +268,10 @@ void dump_tga(const char *filename, int width, int height, void *argb1555_data)
     fclose(f);
 }
 
-struct pixel_storage_i
-{
-    int width;
-    int height;
-    unsigned int tex;
-    float tcxs[4];
-    float tcys[4];
-};
-
-bool is_2pot(int n)
-{
-    return (n & (n - 1)) == 0;
-}
-
-int round_up_to_2pot(int n)
-{
-    assert(n > 0);
-    if (is_2pot(n)) 
-    {
-        return n;
-    }
-    else
-    {
-        int highest_bit = 0;
-        while (n)
-        {
-            highest_bit += 1;
-            n >>= 1;
-        }
-        return 1 << highest_bit;
-    }
-}
-
-unsigned int upload_tex1d(int width, void *data)
-{
-    unsigned int tex;
-
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_1D, tex);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, width, 0, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, data);
-    glBindTexture(GL_TEXTURE_1D, 0);
-
-    if (checkGLError(__LINE__))
-    {
-        printf("error uploading 1d texture w: %d\n", width);
-    }
-    
-    return tex;
-}
-
-pixel_storage_i upload_tex2d(int width, int height, void *data)
-{
-    int texture_width;
-    int texture_height;
-
-    if (0)
-    {
-        int width_2pot = round_up_to_2pot(width);
-        int height_2pot = round_up_to_2pot(height);
-        printf("uploading (%d, %d) -> %dx%d atlas.\n", width, height, width_2pot, height_2pot);
-        texture_width = width_2pot;
-        texture_height = height_2pot;
-    }
-    else
-    {
-        texture_width = width;
-        texture_height = height;
-    }
-
-    checkGLError(__LINE__);
-
-    unsigned int tex;
-    glPixelStorei(GL_UNPACK_ALIGNMENT, 2);
-
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_2D, tex);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, texture_width, texture_height, 0, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, 0);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, width, height, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, data);
-    glBindTexture(GL_TEXTURE_2D, 0);
-
-    if (checkGLError(__LINE__))
-    {
-        printf("error uploading 2d texture w, h: %d, %d\n", texture_width, texture_height);
-    }
-
-    pixel_storage_i ps;
-    ps.width = width;
-    ps.height = height;
-    ps.tex = tex;
-    ps.tcxs[0] = 0.0f;
-    ps.tcxs[1] = width / (float)texture_width;
-    ps.tcxs[2] = width / (float)texture_width;
-    ps.tcxs[3] = 0.0f;
-    ps.tcys[0] = 0.0f;
-    ps.tcys[1] = 0.0f;
-    ps.tcys[2] = height / (float)texture_height;
-    ps.tcys[3] = height / (float)texture_height;
-    return ps;
-}
-
 struct anim_frame_t
 {
     int center_x, center_y;
-    pixel_storage_i ps;
+    pixel_storage_t ps;
 };
 
 static struct
@@ -504,7 +304,7 @@ static struct
     {
         bool valid;
         bool fetching;
-        pixel_storage_i ps;
+        pixel_storage_t ps;
     } entries[0x4000];
 } land_cache;
 
@@ -514,7 +314,7 @@ static struct
     {
         bool valid;
         bool fetching;
-        pixel_storage_i ps;
+        pixel_storage_t ps;
     } entries[0x10000];
 } static_cache;
 
@@ -524,7 +324,7 @@ static struct
     {
         bool valid;
         bool fetching;
-        pixel_storage_i ps;
+        pixel_storage_t ps;
     } entries[0x10000];
 } gump_cache;
 
@@ -574,7 +374,7 @@ static struct
 struct string_cache_entry_t
 {
     bool fetching;
-    pixel_storage_i ps;
+    pixel_storage_t ps;
 };
 static struct
 {
@@ -589,7 +389,7 @@ unsigned int get_hue_tex(int hue_id)
         hue_cache.entries[hue_id-1].valid = true;
 
         ml_hue *hue = ml_get_hue(hue_id-1);
-        hue_cache.entries[hue_id-1].tex = upload_tex1d(32, hue->colors);
+        hue_cache.entries[hue_id-1].tex = gfx_upload_tex1d(32, hue->colors);
     }
 
     return hue_cache.entries[hue_id-1].tex;
@@ -606,7 +406,7 @@ void write_anim_frames(int body_id, int action, int direction, ml_anim *anim)
     {
         frames[j].center_x = anim->frames[j].center_x;
         frames[j].center_y = anim->frames[j].center_y;
-        frames[j].ps = upload_tex2d(anim->frames[j].width, anim->frames[j].height, anim->frames[j].data);
+        frames[j].ps = gfx_upload_tex2d(anim->frames[j].width, anim->frames[j].height, anim->frames[j].data);
     }
 
     anim_cache.entries[body_action_id].directions[direction].frame_count = anim->frame_count;
@@ -659,13 +459,13 @@ anim_frame_t *get_anim_frames(int body_id, int action, int direction, int *frame
 
 void write_land_ps(int land_id, ml_art *l)
 {
-    land_cache.entries[land_id].ps = upload_tex2d(l->width, l->height, l->data);
+    land_cache.entries[land_id].ps = gfx_upload_tex2d(l->width, l->height, l->data);
     free(l);
 
     land_cache.entries[land_id].fetching = false;
 }
 
-pixel_storage_i *get_land_ps(int land_id)
+pixel_storage_t *get_land_ps(int land_id)
 {
     assert(land_id >= 0 && land_id < 0x4000);
     if (!land_cache.entries[land_id].valid)
@@ -691,13 +491,13 @@ pixel_storage_i *get_land_ps(int land_id)
 
 void write_static_ps(int item_id, ml_art *s)
 {
-    static_cache.entries[item_id].ps = upload_tex2d(s->width, s->height, s->data);
+    static_cache.entries[item_id].ps = gfx_upload_tex2d(s->width, s->height, s->data);
     free(s);
 
     static_cache.entries[item_id].fetching = false;
 }
 
-pixel_storage_i *get_static_ps(int item_id)
+pixel_storage_t *get_static_ps(int item_id)
 {
     assert(item_id >= 0 && item_id < 0x10000);
     if (!static_cache.entries[item_id].valid)
@@ -723,13 +523,13 @@ pixel_storage_i *get_static_ps(int item_id)
 
 void write_gump_ps(int gump_id, ml_gump *g)
 {
-    gump_cache.entries[gump_id].ps = upload_tex2d(g->width, g->height, g->data);
+    gump_cache.entries[gump_id].ps = gfx_upload_tex2d(g->width, g->height, g->data);
     free(g);
 
     gump_cache.entries[gump_id].fetching = false;
 }
 
-pixel_storage_i *get_gump_ps(int gump_id)
+pixel_storage_t *get_gump_ps(int gump_id)
 {
     assert(gump_id >= 0 && gump_id < 0x10000);
     if (!gump_cache.entries[gump_id].valid)
@@ -883,13 +683,13 @@ statics_block_t *get_statics_block(int map, int block_x, int block_y)
 
 void write_string_ps(int font_id, std::wstring str, ml_art *a)
 {
-    string_cache.entries[str].ps = upload_tex2d(a->width, a->height, a->data);
+    string_cache.entries[str].ps = gfx_upload_tex2d(a->width, a->height, a->data);
     free(a);
 
     string_cache.entries[str].fetching = false;
 }
 
-pixel_storage_i *get_string_ps(int font_id, std::wstring str)
+pixel_storage_t *get_string_ps(int font_id, std::wstring str)
 {
     std::map<std::wstring, string_cache_entry_t>::iterator it = string_cache.entries.find(str);
     if (it == string_cache.entries.end())
@@ -916,103 +716,20 @@ pixel_storage_i *get_string_ps(int font_id, std::wstring str)
 }
 
 
-
-void render(pixel_storage_i *ps, int xs[4], int ys[4], int draw_prio, int hue_id, int pick_id)
-{
-    bool use_picking = pick_id != -1;
-    bool use_hue = hue_id != 0;
-    unsigned int tex_hue;
-
-    if (use_picking)
-    {
-        int pick_id0 = (pick_id >> 16) & 0xff;
-        int pick_id1 = (pick_id >>  8) & 0xff;
-        int pick_id2 = (pick_id >>  0) & 0xff;
-        float pick_id_vec[3] = { pick_id0 / 255.0f, pick_id1 / 255.0f, pick_id2 / 255.0f };
-        glUseProgram(prg_blit_picking);
-        glUniform1i(glGetUniformLocation(prg_blit_picking, "tex"), 0);
-        glUniform3fv(glGetUniformLocation(prg_blit_picking, "pick_id"), 1, pick_id_vec);
-    }
-    else if (use_hue)
-    {
-        glUseProgram(prg_blit_hue);
-        glUniform1i(glGetUniformLocation(prg_blit_hue, "tex"), 0);
-
-        unsigned int tex_hue = get_hue_tex(hue_id & 0x7fff);
-
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_1D, tex_hue);
-        glActiveTexture(GL_TEXTURE0);
-
-        bool only_grey = (hue_id & 0x8000) == 0;
-        glUniform1i(glGetUniformLocation(prg_blit_hue, "tex_hue"), 1);
-    }
-    checkGLError(__LINE__);
-
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    glOrtho(0, window_width, window_height, 0, -1, 1);
-
-    glBindTexture(GL_TEXTURE_2D, ps->tex);
-
-    glEnable(GL_TEXTURE_2D);
-    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-    glAlphaFunc(GL_GREATER, 0.0f);
-    glDepthFunc(GL_LEQUAL);
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_ALPHA_TEST);
-
-    checkGLError(__LINE__);
-
-
-    glBegin(GL_QUADS);
-    for (int i = 0; i < 4; i++)
-    {
-        glTexCoord2f(ps->tcxs[i], ps->tcys[i]);
-        glVertex3f(xs[i], ys[i], draw_prio / 5000000.0f);
-    }
-    glEnd();
-
-    checkGLError(__LINE__);
-
-    glDisable(GL_ALPHA_TEST);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_TEXTURE_2D);
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-    checkGLError(__LINE__);
-
-    glPopMatrix();
-
-    checkGLError(__LINE__);
-    if (use_picking)
-    {
-        glUseProgram(0);
-        checkGLError(__LINE__);
-    }
-    else if (use_hue)
-    {
-        glUseProgram(0);
-        checkGLError(__LINE__);
-    }
-    checkGLError(__LINE__);
-}
-
-void blit_ps(pixel_storage_i *ps, int x, int y, int draw_prio, int hue_id, int pick_id)
+void blit_ps(pixel_storage_t *ps, int x, int y, int draw_prio, int hue_id, int pick_id)
 {
     int xs[4] = { x, x + ps->width, x + ps->width, x };
     int ys[4] = { y, y, y + ps->height, y + ps->height };
 
-    render(ps, xs, ys, draw_prio, hue_id, pick_id);
+    gfx_render(ps, xs, ys, draw_prio, hue_id, pick_id);
 }
 
-void blit_ps_flipped(pixel_storage_i *ps, int x, int y, int draw_prio, int hue_id, int pick_id)
+void blit_ps_flipped(pixel_storage_t *ps, int x, int y, int draw_prio, int hue_id, int pick_id)
 {
     int xs[4] = { x + ps->width, x, x, x + ps->width };
     int ys[4] = { y, y, y + ps->height, y + ps->height };
 
-    render(ps, xs, ys, draw_prio, hue_id, pick_id);
+    gfx_render(ps, xs, ys, draw_prio, hue_id, pick_id);
 }
 
 mobile_t player =
@@ -1096,7 +813,7 @@ int land_block_z_averaged(int x, int y)
 }
 
 // this might be optimized when it comes to z calculations
-void draw_world_land_ps(pixel_storage_i *ps, int x, int y, int pick_id)
+void draw_world_land_ps(pixel_storage_t *ps, int x, int y, int pick_id)
 {
     int dxs[4] = { 0, 1, 1, 0 };
     int dys[4] = { 0, 0, 1, 1 };
@@ -1133,10 +850,10 @@ void draw_world_land_ps(pixel_storage_i *ps, int x, int y, int pick_id)
             min_z = zs[i];
         }
     }
-    render(ps, xs, ys, world_draw_prio(x, y, min_z), 0, pick_id);
+    gfx_render(ps, xs, ys, world_draw_prio(x, y, min_z), 0, pick_id);
 }
 
-void draw_world_art_ps(pixel_storage_i *ps, int x, int y, int z, int height, int hue_id, int pick_id)
+void draw_world_art_ps(pixel_storage_t *ps, int x, int y, int z, int height, int hue_id, int pick_id)
 {
     if (z >= draw_ceiling)
     {
@@ -1157,7 +874,7 @@ void draw_world_art_ps(pixel_storage_i *ps, int x, int y, int z, int height, int
 
 void draw_world_anim_frame(anim_frame_t *frame, bool flip, int x, int y, int z, int hue_id, int pick_id)
 {
-    pixel_storage_i *ps = &frame->ps;
+    pixel_storage_t *ps = &frame->ps;
     int screen_x;
     int screen_y;
     world_to_screen(x, y, z, &screen_x, &screen_y);
@@ -1181,7 +898,7 @@ void draw_world_anim_frame(anim_frame_t *frame, bool flip, int x, int y, int z, 
 
 void draw_world_land(int tile_id, int x, int y, int pick_id)
 {
-    pixel_storage_i *ps = get_land_ps(tile_id);
+    pixel_storage_t *ps = get_land_ps(tile_id);
     // TODO: this null check shouldn't be necessary
     if (ps)
     {
@@ -1212,7 +929,7 @@ void draw_world_land_block(int map, int block_x, int block_y)
 
 void draw_screen_item(int item_id, int x, int y, int hue_id, int pick_id)
 {
-    pixel_storage_i *ps = get_static_ps(item_id);
+    pixel_storage_t *ps = get_static_ps(item_id);
     // TODO: this null check shouldn't be necessary
     if (ps)
     {
@@ -1223,7 +940,7 @@ void draw_screen_item(int item_id, int x, int y, int hue_id, int pick_id)
 
 void draw_world_item(int item_id, int x, int y, int z, int hue_id, int pick_id)
 {
-    pixel_storage_i *ps = get_static_ps(item_id);
+    pixel_storage_t *ps = get_static_ps(item_id);
     // TODO: this null check shouldn't be necessary
     if (ps)
     {
@@ -1799,7 +1516,7 @@ void draw_world()
 
 void draw_gump(int gump_id, int x, int y, int hue_id, int pick_id)
 {
-    pixel_storage_i *ps = get_gump_ps(gump_id);
+    pixel_storage_t *ps = get_gump_ps(gump_id);
     // TODO: this null check shouldn't be necessary
     if (ps)
     {
@@ -1809,7 +1526,7 @@ void draw_gump(int gump_id, int x, int y, int hue_id, int pick_id)
 
 void draw_gump_tiled(int gump_id, int x, int y, int width, int height, int hue_id, int pick_id)
 {
-    pixel_storage_i *ps = get_gump_ps(gump_id);
+    pixel_storage_t *ps = get_gump_ps(gump_id);
     // TODO: this null check shouldn't be necessary
     if (ps)
     {
@@ -1823,7 +1540,7 @@ void draw_gump_tiled(int gump_id, int x, int y, int width, int height, int hue_i
                                (draw_height != ps->height);
             if (custom_size)
             {
-                pixel_storage_i temp_ps;
+                pixel_storage_t temp_ps;
                 temp_ps.width  = draw_width;
                 temp_ps.height = draw_height;
                 temp_ps.tex    = ps->tex;
@@ -1907,7 +1624,7 @@ void draw_container(gump_t *container)
 
 void draw_text(int x, int y, int font_id, std::wstring s, int pick_id)
 {
-    pixel_storage_i *ps = get_string_ps(font_id, s);
+    pixel_storage_t *ps = get_string_ps(font_id, s);
     blit_ps(ps, x, y, 0, 0, pick_id);
 }
 
