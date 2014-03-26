@@ -279,7 +279,7 @@ static struct
     struct
     {
         bool valid;
-        unsigned int tex;
+        pixel_storage_t ps;
     } entries[8*375];
 } hue_cache;
 
@@ -381,7 +381,7 @@ static struct
     std::map<std::wstring, string_cache_entry_t> entries;
 } string_cache;
 
-unsigned int get_hue_tex(int hue_id)
+pixel_storage_t get_hue_tex(int hue_id)
 {
     assert(hue_id > 0 && hue_id < 8*375);
     if (!hue_cache.entries[hue_id-1].valid)
@@ -389,10 +389,10 @@ unsigned int get_hue_tex(int hue_id)
         hue_cache.entries[hue_id-1].valid = true;
 
         ml_hue *hue = ml_get_hue(hue_id-1);
-        hue_cache.entries[hue_id-1].tex = gfx_upload_tex1d(32, hue->colors);
+        hue_cache.entries[hue_id-1].ps = gfx_upload_tex2d(32, 1, hue->colors);
     }
 
-    return hue_cache.entries[hue_id-1].tex;
+    return hue_cache.entries[hue_id-1].ps;
 }
 
 

@@ -10,7 +10,6 @@ struct pixel_storage_t
     float tcys[4];
 };
 
-unsigned int gfx_upload_tex1d(int width, void *data);
 pixel_storage_t gfx_upload_tex2d(int width, int height, void *data);
 
 int gfx_upload_program(const char *vert_filename, const char *frag_filename);

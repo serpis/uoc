@@ -29,7 +29,7 @@ extern int prg_blit_hue;
 extern const int window_width;
 extern const int window_height;
 
-extern unsigned int get_hue_tex(int hue_id);
+pixel_storage_t get_hue_tex(int hue_id);
 
 
 static bool check_gl_error(int line = -1)
@@ -71,26 +71,6 @@ static int round_up_to_2pot(int n)
 }
 
 
-
-unsigned int gfx_upload_tex1d(int width, void *data)
-{
-    unsigned int tex;
-
-    glGenTextures(1, &tex);
-    glBindTexture(GL_TEXTURE_1D, tex);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
-    glTexParameteri(GL_TEXTURE_1D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
-    glTexImage1D(GL_TEXTURE_1D, 0, GL_RGBA, width, 0, GL_BGRA, GL_UNSIGNED_SHORT_1_5_5_5_REV, data);
-    glBindTexture(GL_TEXTURE_1D, 0);
-
-    if (check_gl_error(__LINE__))
-    {
-        printf("error uploading 1d texture w: %d\n", width);
-    }
-    
-    return tex;
-}
 
 pixel_storage_t gfx_upload_tex2d(int width, int height, void *data)
 {
@@ -247,10 +227,10 @@ void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hu
         glUseProgram(prg_blit_hue);
         glUniform1i(glGetUniformLocation(prg_blit_hue, "tex"), 0);
 
-        unsigned int tex_hue = get_hue_tex(hue_id & 0x7fff);
+        pixel_storage_t ps_hue = get_hue_tex(hue_id & 0x7fff);
 
         glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_1D, tex_hue);
+        glBindTexture(GL_TEXTURE_2D, ps_hue.tex);
         glActiveTexture(GL_TEXTURE0);
 
         bool only_grey = (hue_id & 0x8000) == 0;
