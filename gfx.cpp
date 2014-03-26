@@ -234,7 +234,9 @@ void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hu
         glActiveTexture(GL_TEXTURE0);
 
         bool only_grey = (hue_id & 0x8000) == 0;
+        float tex_coords_hue[3] = { ps_hue.tcxs[0], ps_hue.tcxs[1], ps_hue.tcys[0] };
         glUniform1i(glGetUniformLocation(prg_blit_hue, "tex_hue"), 1);
+        glUniform3fv(glGetUniformLocation(prg_blit_hue, "tex_coords_hue"), 1, tex_coords_hue);
     }
     check_gl_error(__LINE__);
 
