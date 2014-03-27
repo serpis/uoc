@@ -363,12 +363,31 @@ struct render_command_t
     float uniform3f0[3];
 };
 
+int bound_program = 0;
+int bound_tex0 = 0;
+int bound_tex1 = 0;
+bool did_begin = false;
+
 static void render_command(render_command_t *cmd)
 {
+    if (cmd->program != bound_program)
+    {
+        if (did_begin)
+        {
+            glEnd();
+            did_begin = false;
+        }
+        glUseProgram(cmd->program);
+        bound_program = cmd->program;
+    }
+
     if (cmd->program != 0)
     {
-        glUseProgram(cmd->program);
-
+        if (did_begin)
+        {
+            glEnd();
+            did_begin = false;
+        }
         if (cmd->uniform1i0_loc != -1)
         {
             glUniform1i(cmd->uniform1i0_loc, cmd->uniform1i0);
@@ -382,62 +401,55 @@ static void render_command(render_command_t *cmd)
             glUniform3fv(cmd->uniform3f0_loc, 1, cmd->uniform3f0);
         }
     }
-    if (cmd->tex0 != 0)
+    if (cmd->tex0 != bound_tex0)
     {
+        if (did_begin)
+        {
+            glEnd();
+            did_begin = false;
+        }
         glBindTexture(GL_TEXTURE_2D, cmd->tex0);
+        bound_tex0 = cmd->tex0;
     }
-    if (cmd->tex1 != 0)
+    if (cmd->tex1 != bound_tex1)
     {
+        if (did_begin)
+        {
+            glEnd();
+            did_begin = false;
+        }
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, cmd->tex1);
         glActiveTexture(GL_TEXTURE0);
+        bound_tex1 = cmd->tex1;
     }
 
+    //check_gl_error(__LINE__);
 
-    check_gl_error(__LINE__);
 
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    glOrtho(0, window_width, window_height, 0, -1, 1);
+    //check_gl_error(__LINE__);
 
-    check_gl_error(__LINE__);
-
-    glEnable(GL_TEXTURE_2D);
-    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-    glAlphaFunc(GL_GREATER, 0.0f);
-    glDepthFunc(GL_LEQUAL);
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_ALPHA_TEST);
-
-    check_gl_error(__LINE__);
-
-    glBegin(GL_QUADS);
+    if (!did_begin)
+    {
+        glBegin(GL_QUADS);
+        did_begin = true;
+    }
     for (int i = 0; i < 4; i++)
     {
         glTexCoord2f(cmd->tcxs[i], cmd->tcys[i]);
         glVertex3f(cmd->xs[i], cmd->ys[i], cmd->draw_prio / 5000000.0f);
     }
-    glEnd();
+    //glEnd();
 
-    check_gl_error(__LINE__);
+    //check_gl_error(__LINE__);
 
-    glDisable(GL_ALPHA_TEST);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_TEXTURE_2D);
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-    check_gl_error(__LINE__);
-
-    glPopMatrix();
-
-    check_gl_error(__LINE__);
-    if (cmd->program != 0)
+    //check_gl_error(__LINE__);
+    /*if (cmd->program != 0)
     {
         glUseProgram(0);
         check_gl_error(__LINE__);
-    }
-    check_gl_error(__LINE__);
+    }*/
+    //check_gl_error(__LINE__);
 
     /*
     bool use_picking = cmd->pick_id != -1;
@@ -524,12 +536,66 @@ std::list<render_command_t> cmds;
 
 void gfx_flush()
 {
+    // prepare a good state
+    {
+        glMatrixMode(GL_PROJECTION);
+        glPushMatrix();
+        glLoadIdentity();
+        glOrtho(0, window_width, window_height, 0, -1, 1);
+
+        //check_gl_error(__LINE__);
+
+        glEnable(GL_TEXTURE_2D);
+        glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+        glAlphaFunc(GL_GREATER, 0.0f);
+        glDepthFunc(GL_LEQUAL);
+        glEnable(GL_DEPTH_TEST);
+        glEnable(GL_ALPHA_TEST);
+    }
+
+    // execute all render commands
     for (std::list<render_command_t>::iterator it = cmds.begin(); it != cmds.end(); ++it)
     {
         render_command_t *cmd = &(*it);
         render_command(cmd);
     }
     cmds.clear();
+
+    if (did_begin)
+    {
+        glEnd();
+        did_begin = false;
+    }
+
+    // clean up state
+    {
+        glDisable(GL_ALPHA_TEST);
+        glDisable(GL_DEPTH_TEST);
+        glDisable(GL_TEXTURE_2D);
+
+        //glBindTexture(GL_TEXTURE_2D, 0);
+        //check_gl_error(__LINE__);
+
+        glPopMatrix();
+    }
+
+    if (bound_program != 0)
+    {
+        glUseProgram(0);
+        bound_program = 0;
+    }
+    if (bound_tex0 != 0)
+    {
+        glBindTexture(GL_TEXTURE_2D, 0);
+        bound_tex0 = 0;
+    }
+    if (bound_tex1 != 0)
+    {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, 0);
+        glActiveTexture(GL_TEXTURE0);
+        bound_tex1 = 0;
+    }
 }
 
 void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hue_id, int pick_id)
@@ -563,7 +629,7 @@ void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hu
 
         cmd.uniform1i1_loc = -1;
 
-        cmd.uniform3f0_loc = glGetUniformLocation(prg_blit_hue, "pick_id");
+        cmd.uniform3f0_loc = glGetUniformLocation(prg_blit_picking, "pick_id");
         memcpy(cmd.uniform3f0, pick_id_vec, sizeof(cmd.uniform3f0));
     }
     else if (use_hue)
@@ -609,9 +675,9 @@ void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hu
         cmd.only_grey = false;*/
     }
 
-    //cmds.push_back(cmd);
+    cmds.push_back(cmd);
 
-    render_command(&cmd);
+    //render_command(&cmd);
 /*
     unsigned int tex_hue;
 
