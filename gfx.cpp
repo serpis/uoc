@@ -1,6 +1,8 @@
 #include <cassert>
 
+#include <algorithm>
 #include <list>
+#include <vector>
 
 #include "file.hpp"
 #include "gfx.hpp"
@@ -363,6 +365,13 @@ struct render_command_t
     float uniform3f0[3];
 };
 
+int cnt_render_commands = 0;
+int cnt_use_program = 0;
+int cnt_bind_tex0 = 0;
+int cnt_bind_tex1 = 0;
+int cnt_glbegin = 0;
+int cnt_glend = 0;
+
 int bound_program = 0;
 int bound_tex0 = 0;
 int bound_tex1 = 0;
@@ -370,15 +379,18 @@ bool did_begin = false;
 
 static void render_command(render_command_t *cmd)
 {
+    cnt_render_commands += 1;
     if (cmd->program != bound_program)
     {
         if (did_begin)
         {
             glEnd();
             did_begin = false;
+            cnt_glend += 1;
         }
         glUseProgram(cmd->program);
         bound_program = cmd->program;
+        cnt_use_program += 1;
     }
 
     if (cmd->program != 0)
@@ -387,6 +399,7 @@ static void render_command(render_command_t *cmd)
         {
             glEnd();
             did_begin = false;
+            cnt_glend += 1;
         }
         if (cmd->uniform1i0_loc != -1)
         {
@@ -407,9 +420,11 @@ static void render_command(render_command_t *cmd)
         {
             glEnd();
             did_begin = false;
+            cnt_glend += 1;
         }
         glBindTexture(GL_TEXTURE_2D, cmd->tex0);
         bound_tex0 = cmd->tex0;
+        cnt_bind_tex0 += 1;
     }
     if (cmd->tex1 != bound_tex1)
     {
@@ -417,11 +432,13 @@ static void render_command(render_command_t *cmd)
         {
             glEnd();
             did_begin = false;
+            cnt_glend += 1;
         }
         glActiveTexture(GL_TEXTURE1);
         glBindTexture(GL_TEXTURE_2D, cmd->tex1);
         glActiveTexture(GL_TEXTURE0);
         bound_tex1 = cmd->tex1;
+        cnt_bind_tex1 += 1;
     }
 
     //check_gl_error(__LINE__);
@@ -430,6 +447,7 @@ static void render_command(render_command_t *cmd)
     {
         glBegin(GL_QUADS);
         did_begin = true;
+        cnt_glbegin += 1;
     }
     for (int i = 0; i < 4; i++)
     {
@@ -438,10 +456,34 @@ static void render_command(render_command_t *cmd)
     }
 }
 
-std::list<render_command_t> cmds;
+std::vector<render_command_t> cmds;
+
+bool compare_program(const render_command_t &a, const render_command_t &b)
+{
+    return a.program < b.program;
+}
+
+bool compare_tex0(const render_command_t &a, const render_command_t &b)
+{
+    return a.tex0 < b.tex0;
+}
+
+/*bool myfunction (int i,int j) { return (i<j); }
+
+struct myclass {
+  bool operator() (int i,int j) { return (i<j);}
+} myobject;
+*/
+
+struct myclass {
+  bool operator() (const render_command_t &a, const render_command_t &b) { return a.tex0 < b.tex1; }
+} mysorter;
 
 void gfx_flush()
 {
+    std::sort(cmds.begin(), cmds.end(), compare_tex0);
+    //std::sort(cmds.begin(), cmds.end(), compare_program);
+
     // prepare a good state
     {
         glMatrixMode(GL_PROJECTION);
@@ -458,8 +500,9 @@ void gfx_flush()
     }
     //check_gl_error(__LINE__);
 
+
     // execute all render commands
-    for (std::list<render_command_t>::iterator it = cmds.begin(); it != cmds.end(); ++it)
+    for (std::vector<render_command_t>::iterator it = cmds.begin(); it != cmds.end(); ++it)
     {
         render_command_t *cmd = &(*it);
         render_command(cmd);
@@ -472,6 +515,7 @@ void gfx_flush()
     {
         glEnd();
         did_begin = false;
+        cnt_glend += 1;
     }
 
     // clean up state
