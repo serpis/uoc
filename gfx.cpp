@@ -345,21 +345,101 @@ int gfx_upload_program(const char *vert_filename, const char *frag_filename)
 
 struct render_command_t
 {
-    unsigned int tex;
     int xs[4];
     int ys[4];
     float tcxs[4];
     float tcys[4];
     int draw_prio;
-    int pick_id;
-    unsigned tex_hue;
-    float hue_tcxs[2];
-    float hue_tcy;
-    bool only_grey;
+
+    unsigned int tex0;
+    unsigned int tex1;
+
+    int program;
+    int uniform1i0_loc;
+    int uniform1i0;
+    int uniform1i1_loc;
+    int uniform1i1;
+    int uniform3f0_loc;
+    float uniform3f0[3];
 };
 
 static void render_command(render_command_t *cmd)
 {
+    if (cmd->program != 0)
+    {
+        glUseProgram(cmd->program);
+
+        if (cmd->uniform1i0_loc != -1)
+        {
+            glUniform1i(cmd->uniform1i0_loc, cmd->uniform1i0);
+        }
+        if (cmd->uniform1i1_loc != -1)
+        {
+            glUniform1i(cmd->uniform1i1_loc, cmd->uniform1i1);
+        }
+        if (cmd->uniform3f0_loc != -1)
+        {
+            glUniform3fv(cmd->uniform3f0_loc, 1, cmd->uniform3f0);
+        }
+    }
+    if (cmd->tex0 != 0)
+    {
+        glBindTexture(GL_TEXTURE_2D, cmd->tex0);
+    }
+    if (cmd->tex1 != 0)
+    {
+        glActiveTexture(GL_TEXTURE1);
+        glBindTexture(GL_TEXTURE_2D, cmd->tex1);
+        glActiveTexture(GL_TEXTURE0);
+    }
+
+
+    check_gl_error(__LINE__);
+
+    glMatrixMode(GL_PROJECTION);
+    glPushMatrix();
+    glLoadIdentity();
+    glOrtho(0, window_width, window_height, 0, -1, 1);
+
+    check_gl_error(__LINE__);
+
+    glEnable(GL_TEXTURE_2D);
+    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
+    glAlphaFunc(GL_GREATER, 0.0f);
+    glDepthFunc(GL_LEQUAL);
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_ALPHA_TEST);
+
+    check_gl_error(__LINE__);
+
+    glBegin(GL_QUADS);
+    for (int i = 0; i < 4; i++)
+    {
+        glTexCoord2f(cmd->tcxs[i], cmd->tcys[i]);
+        glVertex3f(cmd->xs[i], cmd->ys[i], cmd->draw_prio / 5000000.0f);
+    }
+    glEnd();
+
+    check_gl_error(__LINE__);
+
+    glDisable(GL_ALPHA_TEST);
+    glDisable(GL_DEPTH_TEST);
+    glDisable(GL_TEXTURE_2D);
+
+    glBindTexture(GL_TEXTURE_2D, 0);
+    check_gl_error(__LINE__);
+
+    glPopMatrix();
+
+    check_gl_error(__LINE__);
+    if (cmd->program != 0)
+    {
+        glUseProgram(0);
+        check_gl_error(__LINE__);
+    }
+    check_gl_error(__LINE__);
+
+    /*
     bool use_picking = cmd->pick_id != -1;
     bool use_hue = cmd->tex_hue != 0;
     unsigned int tex_hue;
@@ -437,6 +517,7 @@ static void render_command(render_command_t *cmd)
         check_gl_error(__LINE__);
     }
     check_gl_error(__LINE__);
+    */
 }
 
 std::list<render_command_t> cmds;
@@ -454,38 +535,83 @@ void gfx_flush()
 void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hue_id, int pick_id)
 {
     render_command_t cmd;
-    cmd.tex = ps->tex;
+    //cmd.tex = ps->tex;
     memcpy(cmd.xs, xs, sizeof(cmd.xs));
     memcpy(cmd.ys, ys, sizeof(cmd.ys));
     memcpy(cmd.tcxs, ps->tcxs, sizeof(cmd.tcxs));
     memcpy(cmd.tcys, ps->tcys, sizeof(cmd.tcys));
     cmd.draw_prio = draw_prio;
-    cmd.pick_id = pick_id;
+    //cmd.pick_id = pick_id;
 
     bool use_picking = pick_id != -1;
     bool use_hue = hue_id != 0;
 
-    if (!use_picking && use_hue)
+    if (use_picking)
+    {
+        int pick_id0 = (pick_id >> 16) & 0xff;
+        int pick_id1 = (pick_id >>  8) & 0xff;
+        int pick_id2 = (pick_id >>  0) & 0xff;
+        float pick_id_vec[3] = { pick_id0 / 255.0f, pick_id1 / 255.0f, pick_id2 / 255.0f };
+
+        cmd.program = prg_blit_picking;
+
+        cmd.tex0 = ps->tex;
+        cmd.tex1 = 0;
+
+        cmd.uniform1i0_loc = glGetUniformLocation(prg_blit_picking, "tex");
+        cmd.uniform1i0 = 0;
+
+        cmd.uniform1i1_loc = -1;
+
+        cmd.uniform3f0_loc = glGetUniformLocation(prg_blit_hue, "pick_id");
+        memcpy(cmd.uniform3f0, pick_id_vec, sizeof(cmd.uniform3f0));
+    }
+    else if (use_hue)
     {
         pixel_storage_t ps_hue = get_hue_tex(hue_id & 0x7fff);
 
-        cmd.tex_hue = ps_hue.tex;
+        cmd.program = prg_blit_hue;
+
+        cmd.tex0 = ps->tex;
+        cmd.tex1 = ps_hue.tex;
+
+        cmd.uniform1i0_loc = glGetUniformLocation(prg_blit_hue, "tex");
+        cmd.uniform1i0 = 0;
+
+        cmd.uniform1i1_loc = glGetUniformLocation(prg_blit_hue, "tex_hue");
+        cmd.uniform1i1 = 1;
+
+        cmd.uniform3f0_loc = glGetUniformLocation(prg_blit_hue, "tex_coords_hue");
+        cmd.uniform3f0[0] = ps_hue.tcxs[0];
+        cmd.uniform3f0[1] = ps_hue.tcxs[1];
+        cmd.uniform3f0[2] = ps_hue.tcys[0];
+
+        /*cmd.tex_hue = ps_hue.tex;
         cmd.hue_tcxs[0] = ps_hue.tcxs[0];
         cmd.hue_tcxs[1] = ps_hue.tcxs[1];
         cmd.hue_tcy = ps_hue.tcys[0];
-        cmd.only_grey = (hue_id & 0x8000) == 0;
+        cmd.only_grey = (hue_id & 0x8000) == 0;*/
     }
     else
     {
-        cmd.tex_hue = 0;
+        cmd.program = 0;
+
+        cmd.tex0 = ps->tex;
+        cmd.tex1 = 0;
+
+        cmd.uniform1i0_loc = -1;
+        cmd.uniform1i1_loc = -1;
+        cmd.uniform3f0_loc = -1;
+
+        /*cmd.tex_hue = 0;
         memset(cmd.hue_tcxs, 0, sizeof(cmd.hue_tcxs));
         cmd.hue_tcy = 0.0f;
-        cmd.only_grey = false;
+        cmd.only_grey = false;*/
     }
 
-    cmds.push_back(cmd);
+    //cmds.push_back(cmd);
 
-    //render_command(&cmd);
+    render_command(&cmd);
 /*
     unsigned int tex_hue;
 
