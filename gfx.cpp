@@ -426,9 +426,6 @@ static void render_command(render_command_t *cmd)
 
     //check_gl_error(__LINE__);
 
-
-    //check_gl_error(__LINE__);
-
     if (!did_begin)
     {
         glBegin(GL_QUADS);
@@ -439,97 +436,6 @@ static void render_command(render_command_t *cmd)
         glTexCoord2f(cmd->tcxs[i], cmd->tcys[i]);
         glVertex3f(cmd->xs[i], cmd->ys[i], cmd->draw_prio / 5000000.0f);
     }
-    //glEnd();
-
-    //check_gl_error(__LINE__);
-
-    //check_gl_error(__LINE__);
-    /*if (cmd->program != 0)
-    {
-        glUseProgram(0);
-        check_gl_error(__LINE__);
-    }*/
-    //check_gl_error(__LINE__);
-
-    /*
-    bool use_picking = cmd->pick_id != -1;
-    bool use_hue = cmd->tex_hue != 0;
-    unsigned int tex_hue;
-
-    if (use_picking)
-    {
-        int pick_id0 = (cmd->pick_id >> 16) & 0xff;
-        int pick_id1 = (cmd->pick_id >>  8) & 0xff;
-        int pick_id2 = (cmd->pick_id >>  0) & 0xff;
-        float pick_id_vec[3] = { pick_id0 / 255.0f, pick_id1 / 255.0f, pick_id2 / 255.0f };
-        glUseProgram(prg_blit_picking);
-        glUniform1i(glGetUniformLocation(prg_blit_picking, "tex"), 0);
-        glUniform3fv(glGetUniformLocation(prg_blit_picking, "pick_id"), 1, pick_id_vec);
-    }
-    else if (use_hue)
-    {
-        glUseProgram(prg_blit_hue);
-        glUniform1i(glGetUniformLocation(prg_blit_hue, "tex"), 0);
-
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, cmd->tex_hue);
-        glActiveTexture(GL_TEXTURE0);
-
-        bool only_grey = cmd->only_grey;
-        glUniform1i(glGetUniformLocation(prg_blit_hue, "tex_hue"), 1);
-        glUniform3f(glGetUniformLocation(prg_blit_hue, "tex_coords_hue"), cmd->hue_tcxs[0], cmd->hue_tcxs[1], cmd->hue_tcy);//0.0, 1.0, 0.0);
-    }
-    check_gl_error(__LINE__);
-
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    glOrtho(0, window_width, window_height, 0, -1, 1);
-
-    glBindTexture(GL_TEXTURE_2D, cmd->tex);
-
-    glEnable(GL_TEXTURE_2D);
-    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-    glAlphaFunc(GL_GREATER, 0.0f);
-    glDepthFunc(GL_LEQUAL);
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_ALPHA_TEST);
-
-    check_gl_error(__LINE__);
-
-
-    glBegin(GL_QUADS);
-    for (int i = 0; i < 4; i++)
-    {
-        glTexCoord2f(cmd->tcxs[i], cmd->tcys[i]);
-        glVertex3f(cmd->xs[i], cmd->ys[i], cmd->draw_prio / 5000000.0f);
-    }
-    glEnd();
-
-    check_gl_error(__LINE__);
-
-    glDisable(GL_ALPHA_TEST);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_TEXTURE_2D);
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-    check_gl_error(__LINE__);
-
-    glPopMatrix();
-
-    check_gl_error(__LINE__);
-    if (use_picking)
-    {
-        glUseProgram(0);
-        check_gl_error(__LINE__);
-    }
-    else if (use_hue)
-    {
-        glUseProgram(0);
-        check_gl_error(__LINE__);
-    }
-    check_gl_error(__LINE__);
-    */
 }
 
 std::list<render_command_t> cmds;
@@ -543,8 +449,6 @@ void gfx_flush()
         glLoadIdentity();
         glOrtho(0, window_width, window_height, 0, -1, 1);
 
-        //check_gl_error(__LINE__);
-
         glEnable(GL_TEXTURE_2D);
         glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
         glAlphaFunc(GL_GREATER, 0.0f);
@@ -552,6 +456,7 @@ void gfx_flush()
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_ALPHA_TEST);
     }
+    //check_gl_error(__LINE__);
 
     // execute all render commands
     for (std::list<render_command_t>::iterator it = cmds.begin(); it != cmds.end(); ++it)
@@ -560,6 +465,8 @@ void gfx_flush()
         render_command(cmd);
     }
     cmds.clear();
+
+    //check_gl_error(__LINE__);
 
     if (did_begin)
     {
@@ -573,11 +480,10 @@ void gfx_flush()
         glDisable(GL_DEPTH_TEST);
         glDisable(GL_TEXTURE_2D);
 
-        //glBindTexture(GL_TEXTURE_2D, 0);
-        //check_gl_error(__LINE__);
-
         glPopMatrix();
     }
+
+    //check_gl_error(__LINE__);
 
     if (bound_program != 0)
     {
@@ -596,18 +502,18 @@ void gfx_flush()
         glActiveTexture(GL_TEXTURE0);
         bound_tex1 = 0;
     }
+
+    //check_gl_error(__LINE__);
 }
 
 void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hue_id, int pick_id)
 {
     render_command_t cmd;
-    //cmd.tex = ps->tex;
     memcpy(cmd.xs, xs, sizeof(cmd.xs));
     memcpy(cmd.ys, ys, sizeof(cmd.ys));
     memcpy(cmd.tcxs, ps->tcxs, sizeof(cmd.tcxs));
     memcpy(cmd.tcys, ps->tcys, sizeof(cmd.tcys));
     cmd.draw_prio = draw_prio;
-    //cmd.pick_id = pick_id;
 
     bool use_picking = pick_id != -1;
     bool use_hue = hue_id != 0;
@@ -652,11 +558,8 @@ void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hu
         cmd.uniform3f0[1] = ps_hue.tcxs[1];
         cmd.uniform3f0[2] = ps_hue.tcys[0];
 
-        /*cmd.tex_hue = ps_hue.tex;
-        cmd.hue_tcxs[0] = ps_hue.tcxs[0];
-        cmd.hue_tcxs[1] = ps_hue.tcxs[1];
-        cmd.hue_tcy = ps_hue.tcys[0];
-        cmd.only_grey = (hue_id & 0x8000) == 0;*/
+        // TODO: add this
+        //cmd.only_grey = (hue_id & 0x8000) == 0;
     }
     else
     {
@@ -668,95 +571,11 @@ void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hu
         cmd.uniform1i0_loc = -1;
         cmd.uniform1i1_loc = -1;
         cmd.uniform3f0_loc = -1;
-
-        /*cmd.tex_hue = 0;
-        memset(cmd.hue_tcxs, 0, sizeof(cmd.hue_tcxs));
-        cmd.hue_tcy = 0.0f;
-        cmd.only_grey = false;*/
     }
 
     cmds.push_back(cmd);
 
     //render_command(&cmd);
-/*
-    unsigned int tex_hue;
-
-    if (use_picking)
-    {
-        int pick_id0 = (pick_id >> 16) & 0xff;
-        int pick_id1 = (pick_id >>  8) & 0xff;
-        int pick_id2 = (pick_id >>  0) & 0xff;
-        float pick_id_vec[3] = { pick_id0 / 255.0f, pick_id1 / 255.0f, pick_id2 / 255.0f };
-        glUseProgram(prg_blit_picking);
-        glUniform1i(glGetUniformLocation(prg_blit_picking, "tex"), 0);
-        glUniform3fv(glGetUniformLocation(prg_blit_picking, "pick_id"), 1, pick_id_vec);
-    }
-    else if (use_hue)
-    {
-        glUseProgram(prg_blit_hue);
-        glUniform1i(glGetUniformLocation(prg_blit_hue, "tex"), 0);
-
-        pixel_storage_t ps_hue = get_hue_tex(hue_id & 0x7fff);
-
-        glActiveTexture(GL_TEXTURE1);
-        glBindTexture(GL_TEXTURE_2D, ps_hue.tex);
-        glActiveTexture(GL_TEXTURE0);
-
-        bool only_grey = (hue_id & 0x8000) == 0;
-        float tex_coords_hue[3] = { ps_hue.tcxs[0], ps_hue.tcxs[1], ps_hue.tcys[0] };
-        glUniform1i(glGetUniformLocation(prg_blit_hue, "tex_hue"), 1);
-        glUniform3f(glGetUniformLocation(prg_blit_hue, "tex_coords_hue"), ps_hue.tcxs[0], ps_hue.tcxs[1], ps_hue.tcys[0]);//0.0, 1.0, 0.0);
-    }
-    check_gl_error(__LINE__);
-
-    glMatrixMode(GL_PROJECTION);
-    glPushMatrix();
-    glLoadIdentity();
-    glOrtho(0, window_width, window_height, 0, -1, 1);
-
-    glBindTexture(GL_TEXTURE_2D, ps->tex);
-
-    glEnable(GL_TEXTURE_2D);
-    glColor4f(1.0f, 1.0f, 1.0f, 1.0f);
-    glAlphaFunc(GL_GREATER, 0.0f);
-    glDepthFunc(GL_LEQUAL);
-    glEnable(GL_DEPTH_TEST);
-    glEnable(GL_ALPHA_TEST);
-
-    check_gl_error(__LINE__);
-
-
-    glBegin(GL_QUADS);
-    for (int i = 0; i < 4; i++)
-    {
-        glTexCoord2f(ps->tcxs[i], ps->tcys[i]);
-        glVertex3f(xs[i], ys[i], draw_prio / 5000000.0f);
-    }
-    glEnd();
-
-    check_gl_error(__LINE__);
-
-    glDisable(GL_ALPHA_TEST);
-    glDisable(GL_DEPTH_TEST);
-    glDisable(GL_TEXTURE_2D);
-
-    glBindTexture(GL_TEXTURE_2D, 0);
-    check_gl_error(__LINE__);
-
-    glPopMatrix();
-
-    check_gl_error(__LINE__);
-    if (use_picking)
-    {
-        glUseProgram(0);
-        check_gl_error(__LINE__);
-    }
-    else if (use_hue)
-    {
-        glUseProgram(0);
-        check_gl_error(__LINE__);
-    }
-    check_gl_error(__LINE__);*/
 }
 
 
