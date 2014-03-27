@@ -456,7 +456,8 @@ static void render_command(render_command_t *cmd)
     }
 }
 
-std::vector<render_command_t> cmds;
+//std::vector<render_command_t> cmds;
+std::vector<render_command_t> cmds[30];
 
 bool compare_program(const render_command_t &a, const render_command_t &b)
 {
@@ -481,7 +482,7 @@ struct myclass {
 
 void gfx_flush()
 {
-    std::sort(cmds.begin(), cmds.end(), compare_tex0);
+    //std::sort(cmds.begin(), cmds.end(), compare_tex0);
     //std::sort(cmds.begin(), cmds.end(), compare_program);
 
     // prepare a good state
@@ -502,12 +503,15 @@ void gfx_flush()
 
 
     // execute all render commands
-    for (std::vector<render_command_t>::iterator it = cmds.begin(); it != cmds.end(); ++it)
+    for (int i = 0; i < 30; i++)
     {
-        render_command_t *cmd = &(*it);
-        render_command(cmd);
+        for (std::vector<render_command_t>::iterator it = cmds[i].begin(); it != cmds[i].end(); ++it)
+        {
+            render_command_t *cmd = &(*it);
+            render_command(cmd);
+        }
+        cmds[i].clear();
     }
-    cmds.clear();
 
     //check_gl_error(__LINE__);
 
@@ -617,7 +621,8 @@ void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hu
         cmd.uniform3f0_loc = -1;
     }
 
-    cmds.push_back(cmd);
+    assert(cmd.tex0 < 30);
+    cmds[cmd.tex0].push_back(cmd);
 
     //render_command(&cmd);
 }
