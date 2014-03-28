@@ -934,6 +934,7 @@ void draw_world_land_block(int map, int block_x, int block_y)
     }
 }
 
+static int gump_draw_order = 0;
 void draw_screen_item(int item_id, int x, int y, int hue_id, int pick_id)
 {
     pixel_storage_t *ps = get_static_ps(item_id);
@@ -941,7 +942,7 @@ void draw_screen_item(int item_id, int x, int y, int hue_id, int pick_id)
     if (ps)
     {
         // TODO: figure out some kind of depth value
-        blit_ps(ps, x, y, 0, hue_id, pick_id);
+        blit_ps(ps, x, y, gump_draw_order++, hue_id, pick_id);
     }
 }
 
@@ -1521,7 +1522,6 @@ void draw_world()
     }
 }
 
-static int gump_draw_order = 0;
 void draw_gump(int gump_id, int x, int y, int hue_id, int pick_id)
 {
     pixel_storage_t *ps = get_gump_ps(gump_id);
@@ -2243,6 +2243,16 @@ int main()
                                     net_send_drop_item(dragging.item.serial, offset_x, offset_y, 0, gump->container.item->serial);
                                     dragging.type = DRAGTYPE_NONE;
                                 }
+                                else if (gump->type == GUMPTYPE_PAPERDOLL)
+                                {
+                                    // TODO: only attempt to equip when dropping on player's own paperdoll
+                                    ml_item_data_entry *item_data = ml_get_item_data(dragging.item.item_id);
+                                    if ((item_data->flags & TILEFLAG_WEARABLE) != 0)
+                                    {
+                                        net_send_equip_item(dragging.item.serial, item_data->layer, gump->paperdoll.mobile->serial);
+                                        dragging.type = DRAGTYPE_NONE;
+                                    }
+                                }
                                 else
                                 {
                                     printf("TODO: figure out how to drop into this gump.\n");
@@ -2250,11 +2260,20 @@ int main()
                             }
                             else if (pick_target->type == TYPE_ITEM)
                             {
-                                printf("TODO: figure out now how to drop onto an item.\n");
+                                item_t *target = pick_target->item.item;
+                                ml_item_data_entry *item_data = ml_get_item_data(target->item_id);
+                                // TODO: also attempt drop if items are stackable and of same type
+                                if ((item_data->flags & TILEFLAG_CONTAINER) != 0)
+                                {
+                                    net_send_drop_item(dragging.item.serial, 0, 0, 0, target->serial);
+                                    dragging.type = DRAGTYPE_NONE;
+                                }
                             }
                             else if (pick_target->type == TYPE_MOBILE)
                             {
-                                printf("TODO: figure out now how to drop onto a mobile.\n");
+                                mobile_t *target = pick_target->mobile.mobile;
+                                net_send_drop_item(dragging.item.serial, 0, 0, 0, target->serial);
+                                dragging.type = DRAGTYPE_NONE;
                             }
                             else if (pick_target->type == TYPE_LAND)
                             {

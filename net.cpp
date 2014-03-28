@@ -681,6 +681,19 @@ void net_send_drop_item(uint32_t item_serial, int x, int y, int z, uint32_t cont
     send_packet(data, end);
 }
 
+void net_send_equip_item(uint32_t item_serial, int layer, uint32_t mob_serial)
+{
+    char data[10];
+    char *p = data;
+    char *end = p + sizeof(data);
+    write_uint8(&p, end, 0x13);
+    write_uint32_be(&p, end, item_serial);
+    write_uint8(&p, end, layer);
+    write_uint32_be(&p, end, mob_serial);
+    assert(p == end);
+    send_packet(data, end);
+}
+
 void net_send_gump_response(uint32_t serial, uint32_t gump_type_id, int response_id)
 {
     char data[128];
