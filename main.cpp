@@ -1521,13 +1521,14 @@ void draw_world()
     }
 }
 
+static int gump_draw_order = 0;
 void draw_gump(int gump_id, int x, int y, int hue_id, int pick_id)
 {
     pixel_storage_t *ps = get_gump_ps(gump_id);
     // TODO: this null check shouldn't be necessary
     if (ps)
     {
-        blit_ps(ps, x, y, 0, hue_id, pick_id);
+        blit_ps(ps, x, y, gump_draw_order++, hue_id, pick_id);
     }
 }
 
@@ -1554,11 +1555,11 @@ void draw_gump_tiled(int gump_id, int x, int y, int width, int height, int hue_i
                 // TODO: should do something more clever with texture coords...
                 memcpy(temp_ps.tcxs, ps->tcxs, sizeof(temp_ps.tcxs));
                 memcpy(temp_ps.tcys, ps->tcys, sizeof(temp_ps.tcys));
-                blit_ps(&temp_ps, draw_x, draw_y, 0, hue_id, pick_id);
+                blit_ps(&temp_ps, draw_x, draw_y, gump_draw_order++, hue_id, pick_id);
             }
             else
             {
-                blit_ps(ps, draw_x, draw_y, 0, hue_id, pick_id);
+                blit_ps(ps, draw_x, draw_y, gump_draw_order++, hue_id, pick_id);
             }
         }
         //blit_ps_tiled(ps, x, y, width, height, 0, hue_id, pick_id);
@@ -1632,7 +1633,7 @@ void draw_container(gump_t *container)
 void draw_text(int x, int y, int font_id, std::wstring s, int pick_id)
 {
     pixel_storage_t *ps = get_string_ps(font_id, s);
-    blit_ps(ps, x, y, 0, 0, pick_id);
+    blit_ps(ps, x, y, gump_draw_order++, 0, pick_id);
 }
 
 void draw_generic_gump(gump_t *gump)
@@ -2061,6 +2062,8 @@ int main()
         SDL_Event e;
         while (SDL_PollEvent(&e))
         {
+            gump_draw_order = 0;
+
             // window closed
             if (e.type == SDL_QUIT)
             {
@@ -2118,6 +2121,12 @@ int main()
                                         dragging.gump.gump = gump;
                                         dragging.gump.handle_x = mouse_x - gump->x;
                                         dragging.gump.handle_y = mouse_y - gump->y;
+
+                                        // move gump to top
+                                        std::list<gump_t *>::iterator it = std::find(gump_list.begin(), gump_list.end(), gump);
+                                        assert(it != gump_list.end());
+                                        gump_list.erase(it);
+                                        gump_list.push_back(gump);
                                     }
                                     printf("gump\n");
                                     break;
@@ -2126,6 +2135,7 @@ int main()
                                             pick_target->mobile.mobile->x,
                                             pick_target->mobile.mobile->y,
                                             pick_target->mobile.mobile->z);
+                                    break;
                                 case TYPE_LAND:
                                     printf("land at (%d, %d, %d), tile_id: %d, surface: %d, impassable: %d, stairs: %d\n",
                                             pick_target->land.x,
