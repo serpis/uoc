@@ -857,7 +857,7 @@ void draw_world_land_ps(pixel_storage_t *ps, int x, int y, int pick_id)
             min_z = zs[i];
         }
     }
-    gfx_render(ps, xs, ys, world_draw_prio(x, y, min_z), 0, pick_id);
+    gfx_render(ps, xs, ys, world_draw_prio(x, y, min_z-1), 0, pick_id);
 }
 
 void draw_world_art_ps(pixel_storage_t *ps, int x, int y, int z, int height, int hue_id, int pick_id)
@@ -952,7 +952,7 @@ void draw_world_item(int item_id, int x, int y, int z, int hue_id, int pick_id)
     if (ps)
     {
         int height = ml_get_item_data(item_id)->height;
-        draw_world_art_ps(ps, x,  y, z, height, hue_id, pick_id);
+        draw_world_art_ps(ps, x, y, z, height, hue_id, pick_id);
     }
 }
 
@@ -2121,6 +2121,11 @@ int main()
                                     }
                                     printf("gump\n");
                                     break;
+                                case TYPE_MOBILE:
+                                    printf("mobile at (%d, %d, %d)\n",
+                                            pick_target->mobile.mobile->x,
+                                            pick_target->mobile.mobile->y,
+                                            pick_target->mobile.mobile->z);
                                 case TYPE_LAND:
                                     printf("land at (%d, %d, %d), tile_id: %d, surface: %d, impassable: %d, stairs: %d\n",
                                             pick_target->land.x,
@@ -2136,10 +2141,11 @@ int main()
                                 {
                                     bool check_a = (ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_STAIRS_A) != 0;
                                     bool check_b = (ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_STAIRS_B) != 0;
-                                    printf("static at (%d, %d, %d), item_id: %d, surface: %d, impassable: %d, stairs: %d flags: %lx, ca: %d, cb: %d %lx\n",
+                                    printf("static at (%d, %d, %d), height: %d, item_id: %d, surface: %d, impassable: %d, stairs: %d flags: %lx, ca: %d, cb: %d %lx\n",
                                             pick_target->static_item.x,
                                             pick_target->static_item.y,
                                             pick_target->static_item.z,
+                                            ml_get_item_data(pick_target->static_item.item_id)->height,
                                             pick_target->static_item.item_id,
                                             (ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_SURFACE   ) != 0,
                                             (ml_get_item_data(pick_target->static_item.item_id)->flags & TILEFLAG_IMPASSABLE) != 0,
