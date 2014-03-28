@@ -347,11 +347,15 @@ int gfx_upload_program(const char *vert_filename, const char *frag_filename)
 
 struct render_command_t
 {
-    int xs[4];
-    int ys[4];
-    float tcxs[4];
-    float tcys[4];
-    int draw_prio;
+    //int xs[4];
+    //int ys[4];
+    //float tcxs[4];
+    //float tcys[4];
+
+    float pos[4][3];
+    float tex_coords[4][2];
+    float normal[4][3];
+    //int draw_prio;
 
     unsigned int tex0;
     unsigned int tex1;
@@ -361,8 +365,8 @@ struct render_command_t
     int uniform1i0;
     int uniform1i1_loc;
     int uniform1i1;
-    int uniform3f0_loc;
-    float uniform3f0[3];
+    //int uniform3f0_loc;
+    //float uniform3f0[3];
 };
 
 int cnt_render_commands = 0;
@@ -409,10 +413,10 @@ static void render_command(render_command_t *cmd)
         {
             glUniform1i(cmd->uniform1i1_loc, cmd->uniform1i1);
         }
-        if (cmd->uniform3f0_loc != -1)
+        /*if (cmd->uniform3f0_loc != -1)
         {
             glUniform3fv(cmd->uniform3f0_loc, 1, cmd->uniform3f0);
-        }
+        }*/
     }
     if (cmd->tex0 != bound_tex0)
     {
@@ -451,8 +455,20 @@ static void render_command(render_command_t *cmd)
     }
     for (int i = 0; i < 4; i++)
     {
-        glTexCoord2f(cmd->tcxs[i], cmd->tcys[i]);
-        glVertex3f(cmd->xs[i], cmd->ys[i], cmd->draw_prio / 5000000.0f);
+        glTexCoord2f(cmd->tex_coords[i][0], cmd->tex_coords[i][1]);
+        glNormal3f(cmd->normal[i][0], cmd->normal[i][1], cmd->normal[i][2]);
+        //printf("%f %f %f\n", cmd->normal[i][0], cmd->normal[i][1], cmd->normal[i][2]);
+
+        glVertex3f(cmd->pos[i][0], cmd->pos[i][1], cmd->pos[i][2]);
+
+        //glTexCoord2f(cmd->tcxs[i], cmd->tcys[i]);
+        //glVertex3f(cmd->xs[i], cmd->ys[i], cmd->draw_prio / 5000000.0f);
+    }
+    if (did_begin)
+    {
+        glEnd();
+        did_begin = false;
+        cnt_glend += 1;
     }
 }
 
@@ -499,7 +515,7 @@ void gfx_flush()
         glEnable(GL_DEPTH_TEST);
         glEnable(GL_ALPHA_TEST);
     }
-    //check_gl_error(__LINE__);
+    check_gl_error(__LINE__);
 
 
     // execute all render commands
@@ -513,7 +529,7 @@ void gfx_flush()
         cmds[i].clear();
     }
 
-    //check_gl_error(__LINE__);
+    check_gl_error(__LINE__);
 
     if (did_begin)
     {
@@ -521,6 +537,8 @@ void gfx_flush()
         did_begin = false;
         cnt_glend += 1;
     }
+
+    check_gl_error(__LINE__);
 
     // clean up state
     {
@@ -531,7 +549,7 @@ void gfx_flush()
         glPopMatrix();
     }
 
-    //check_gl_error(__LINE__);
+    check_gl_error(__LINE__);
 
     if (bound_program != 0)
     {
@@ -557,11 +575,22 @@ void gfx_flush()
 void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hue_id, int pick_id)
 {
     render_command_t cmd;
-    memcpy(cmd.xs, xs, sizeof(cmd.xs));
-    memcpy(cmd.ys, ys, sizeof(cmd.ys));
-    memcpy(cmd.tcxs, ps->tcxs, sizeof(cmd.tcxs));
-    memcpy(cmd.tcys, ps->tcys, sizeof(cmd.tcys));
-    cmd.draw_prio = draw_prio;
+    for (int i = 0; i < 4; i++)
+    {
+        cmd.pos[i][0] = xs[i];
+        cmd.pos[i][1] = ys[i];
+        cmd.pos[i][2] = draw_prio / 5000000.0f;
+    }
+    for (int i = 0; i < 4; i++)
+    {
+        cmd.tex_coords[i][0] = ps->tcxs[i];
+        cmd.tex_coords[i][1] = ps->tcys[i];
+    }
+    //memcpy(cmd.xs, xs, sizeof(cmd.xs));
+    //memcpy(cmd.ys, ys, sizeof(cmd.ys));
+    //memcpy(cmd.tcxs, ps->tcxs, sizeof(cmd.tcxs));
+    //memcpy(cmd.tcys, ps->tcys, sizeof(cmd.tcys));
+    //cmd.draw_prio = draw_prio;
 
     bool use_picking = pick_id != -1;
     bool use_hue = hue_id != 0;
@@ -583,8 +612,15 @@ void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hu
 
         cmd.uniform1i1_loc = -1;
 
-        cmd.uniform3f0_loc = glGetUniformLocation(prg_blit_picking, "pick_id");
-        memcpy(cmd.uniform3f0, pick_id_vec, sizeof(cmd.uniform3f0));
+        //cmd.uniform3f0_loc = glGetUniformLocation(prg_blit_picking, "pick_id");
+        //memcpy(cmd.uniform3f0, pick_id_vec, sizeof(cmd.uniform3f0));
+
+        for (int i = 0; i < 4; i++)
+        {
+            cmd.normal[i][0] = pick_id_vec[0];
+            cmd.normal[i][1] = pick_id_vec[1];
+            cmd.normal[i][2] = pick_id_vec[2];
+        }
     }
     else if (use_hue)
     {
@@ -601,10 +637,17 @@ void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hu
         cmd.uniform1i1_loc = glGetUniformLocation(prg_blit_hue, "tex_hue");
         cmd.uniform1i1 = 1;
 
-        cmd.uniform3f0_loc = glGetUniformLocation(prg_blit_hue, "tex_coords_hue");
-        cmd.uniform3f0[0] = ps_hue.tcxs[0];
-        cmd.uniform3f0[1] = ps_hue.tcxs[1];
-        cmd.uniform3f0[2] = ps_hue.tcys[0];
+        //cmd.uniform3f0_loc = glGetUniformLocation(prg_blit_hue, "tex_coords_hue");
+        //cmd.uniform3f0[0] = ps_hue.tcxs[0];
+        //cmd.uniform3f0[1] = ps_hue.tcxs[1];
+        //cmd.uniform3f0[2] = ps_hue.tcys[0];
+
+        for (int i = 0; i < 4; i++)
+        {
+            cmd.normal[i][0] = ps_hue.tcxs[0];
+            cmd.normal[i][1] = ps_hue.tcxs[1];
+            cmd.normal[i][2] = ps_hue.tcys[0];
+        }
 
         // TODO: add this
         //cmd.only_grey = (hue_id & 0x8000) == 0;
@@ -616,9 +659,16 @@ void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hu
         cmd.tex0 = ps->tex;
         cmd.tex1 = 0;
 
-        cmd.uniform1i0_loc = -1;
-        cmd.uniform1i1_loc = -1;
-        cmd.uniform3f0_loc = -1;
+        //cmd.uniform1i0_loc = -1;
+        //cmd.uniform1i1_loc = -1;
+        //cmd.uniform3f0_loc = -1;
+
+        for (int i = 0; i < 4; i++)
+        {
+            cmd.normal[i][0] = 0.0f;
+            cmd.normal[i][1] = 0.0f;
+            cmd.normal[i][2] = 0.0f;
+        }
     }
 
     assert(cmd.tex0 < 30);

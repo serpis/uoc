@@ -36,6 +36,13 @@
 
 #endif
 
+extern int cnt_render_commands;
+extern int cnt_use_program;
+extern int cnt_bind_tex0;
+extern int cnt_bind_tex1;
+extern int cnt_glbegin;
+extern int cnt_glend;
+
 const int ping_frequency = 30000;
 
 const int TYPE_LAND        = 0;
@@ -1894,6 +1901,7 @@ int main()
     long next_fps = start + 1000;
     int frames = 0;
     bool running = true;
+    int fps = 0;
     while (running)
     {
         // first some housekeeping...
@@ -1905,6 +1913,7 @@ int main()
         {
             char title[64];
             sprintf(title, ":D - fps: %d", frames);
+            fps = frames;
             SDL_SetWindowTitle(main_window, title);
 
             next_fps += 1000;
@@ -2389,6 +2398,15 @@ int main()
 
         //
         SDL_GL_SwapWindow(main_window);
+
+        //printf("fps: %d, per frame: commands: %d, use_program: %d, bind_tex0: %d, bind_tex1: %d, glbegin: %d, glend: %d\n", fps, cnt_render_commands, cnt_use_program, cnt_bind_tex0, cnt_bind_tex1, cnt_glbegin, cnt_glend);
+        // reset counters
+        cnt_render_commands = 0;
+        cnt_use_program = 0;
+        cnt_bind_tex0 = 0;
+        cnt_bind_tex1 = 0;
+        cnt_glbegin = 0;
+        cnt_glend = 0;
     }
  
     SDL_GL_DeleteContext(main_context);
