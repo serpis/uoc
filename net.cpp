@@ -72,7 +72,7 @@ static int decode_one_utf8(const char *s, int *used_octets)
     }
 }
 
-static std::wstring decode_utf8_cstr(const char *s)
+std::wstring decode_utf8_cstr(const char *s)
 {
     std::wstring res;
     while (*s)
@@ -804,6 +804,39 @@ void net_send_gump_response(uint32_t serial, uint32_t gump_type_id, int response
     int length = p - data;
     write_uint16_be(&lenp, end, length);
 
+    send_packet(data, p);
+}
+
+void net_send_speech(std::wstring str)
+{
+    char data[512];
+    char *p = data;
+    const char *start = p;
+    const char *end = p + sizeof(data);
+    int str_len = str.length();
+    int str_byte_len = str_len * 2;
+    int packet_len = 12 + str_byte_len + 2;
+
+    write_uint8(&p, end, 0xad);
+    write_uint16_be(&p, end, packet_len);
+
+    write_uint8(&p, end, 0); // type
+    write_uint16_be(&p, end, 0); // hue_id
+    write_uint16_be(&p, end, 0); // font_id
+    write_uint8(&p, end, 'E'); // language
+    write_uint8(&p, end, 'N'); // language
+    write_uint8(&p, end, 'U'); // language
+    write_uint8(&p, end, '\0'); // language
+
+    for (int i = 0; i < str_len; i++)
+    {
+        int c = str[i];
+        write_uint16_be(&p, end, c);
+    }
+    // null-terminate
+    write_uint16_be(&p, end, 0);
+
+    assert(p - start == packet_len);
     send_packet(data, p);
 }
 

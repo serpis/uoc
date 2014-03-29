@@ -55,6 +55,8 @@ const int TYPE_GUMP_WIDGET = 5;
 int window_width = 800;
 int window_height = 600;
 
+std::wstring chat_str;
+
 struct pick_target_t
 {
     int type;
@@ -1894,6 +1896,8 @@ int find_move_z(int map, int x, int y, int cur_z)
     return highest_steppable_z;
 }
 
+extern std::wstring decode_utf8_cstr(const char *s);
+
 int main()
 {
     ml_init();
@@ -1941,6 +1945,9 @@ int main()
     // 0 = free running
     // 1 = vsync
     SDL_GL_SetSwapInterval(1);
+
+    // accept input
+    SDL_StartTextInput();
 
     long next_ping = ping_frequency;
     long next_move = -1;
@@ -2110,6 +2117,11 @@ int main()
             draw_screen_item(item_id, mouse_x, mouse_y, hue_id, -1);
         }
 
+        // draw chat string
+        {
+            draw_text(0, 0, 0, chat_str + L"_", -1);
+        }
+
         gfx_flush();
 
 
@@ -2128,7 +2140,30 @@ int main()
             }
             if (e.type == SDL_KEYDOWN)
             {
-                running = false;
+                if (e.key.keysym.sym == SDLK_ESCAPE)
+                {
+                    running = false;
+                }
+                if (e.key.keysym.sym == SDLK_BACKSPACE)
+                {
+                    if (chat_str.length() > 0)
+                    {
+                        chat_str = chat_str.substr(0, chat_str.length()-1);
+                    }
+                }
+                if (e.key.keysym.sym == SDLK_RETURN || e.key.keysym.sym == SDLK_KP_ENTER)
+                {
+                    if (chat_str.length() > 0)
+                    {
+                        net_send_speech(chat_str);
+                        chat_str.clear();
+                    }
+                }
+            }
+            if (e.type == SDL_TEXTINPUT)
+            {
+                std::wstring s = decode_utf8_cstr(e.text.text);
+                chat_str += s;
             }
             if (e.type == SDL_MOUSEBUTTONDOWN)
             {
