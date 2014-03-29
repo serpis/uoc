@@ -1719,7 +1719,7 @@ void net_poll()
                 }
                 case 0xc1: {
                     uint32_t speaker_serial = read_uint32_be(&p, end);
-                    read_uint16_le(&p, end);
+                    int graphic = read_uint16_le(&p, end);
                     int type = read_uint8(&p, end);
                     int hue_id = read_uint16_be(&p, end);
                     int font_id = read_uint16_be(&p, end);
@@ -1732,7 +1732,7 @@ void net_poll()
                     std::wstring arg_str;
                     while (true)
                     {
-                        // yes, this is little-endian
+                        // yes, this is little-endian in 0xc1
                         int c = read_uint16_le(&p, end);
                         if (c == 0)
                         {
@@ -1745,6 +1745,65 @@ void net_poll()
                     }
                     std::vector<std::wstring> args = split(arg_str, L'\t');
                     std::wstring res = cliloc_format_resolve(format, args);
+                    std::wcout << speaker << ": " << res << std::endl;
+
+                    break;
+                }
+                case 0xcc: {
+                    uint32_t speaker_serial = read_uint32_be(&p, end);
+                    int graphic_id = read_uint16_le(&p, end);
+                    int type = read_uint8(&p, end);
+                    int hue_id = read_uint16_be(&p, end);
+                    int font_id = read_uint16_be(&p, end);
+                    int cliloc_id = read_uint32_be(&p, end);
+                    int flags = read_uint8(&p, end);
+
+                    char speaker[31];
+                    speaker[30] = '\0';
+                    read_ascii_fixed(&p, end, speaker, 30);
+
+                    std::wstring affix;
+                    while (true)
+                    {
+                        int c = read_uint8(&p, end);
+                        if (c == 0)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            affix += c;
+                        }
+                    }
+
+                    std::wstring format = decode_utf8_cstr(ml_get_cliloc(cliloc_id));
+                    std::wstring arg_str;
+                    while (true)
+                    {
+                        // big-endian in 0xcc
+                        int c = read_uint16_be(&p, end);
+                        if (c == 0)
+                        {
+                            break;
+                        }
+                        else
+                        {
+                            arg_str += c;
+                        }
+                    }
+                    std::vector<std::wstring> args = split(arg_str, L'\t');
+                    std::wstring res = cliloc_format_resolve(format, args);
+
+                    // prepend or append?
+                    if (flags & 0x1)
+                    {
+                        res = affix + res;
+                    }
+                    else
+                    {
+                        res += affix;
+                    }
+
                     std::wcout << speaker << ": " << res << std::endl;
 
                     break;
@@ -2111,6 +2170,7 @@ void net_init()
     packet_lengths[0xc0] = 36; // hued effect
     packet_lengths[0xc1] = 0; // cliloc message
     packet_lengths[0xc8] = 2; // update range
+    packet_lengths[0xcc] = 0; // cliloc message, affix
     packet_lengths[0xd4] = 0; // book header
     packet_lengths[0xdc] = 9; // item revision
     packet_lengths[0xdd] = 0; // display gump packed
