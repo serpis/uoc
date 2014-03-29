@@ -32,6 +32,7 @@ static ml_font_metadata   *font_metadatas        = NULL;
 static ml_index           *anim_idx              = NULL;
 static ml_index           *art_idx               = NULL;
 static ml_index           *gump_idx              = NULL;
+static ml_index           *multi_idx             = NULL;
 static ml_index           *statics0_blocks_idx   = NULL;
 static ml_index           *statics1_blocks_idx   = NULL;
 
@@ -459,6 +460,43 @@ static void gump(int offset, int length, int width, int height, ml_gump **g)
 
     // do stuff...
     parse_gump(p + offset, p + offset + length, width, height, g);
+
+    file_unmap(p, end);
+}
+
+static void parse_multi(const char *p, const char *end, ml_multi **m)
+{
+    int num_bytes = (int)(end - p);
+    int item_count = num_bytes / 16;
+
+    int multi_size = sizeof(ml_multi) + item_count * sizeof((*m)->items[0]);
+    *m = (ml_multi *)malloc(multi_size);
+    (*m)->item_count = item_count;
+
+    for (int i = 0; i < item_count; i++)
+    {
+        (*m)->items[i].item_id = read_uint16_le(&p, end);
+        (*m)->items[i].x = read_sint16_le(&p, end);
+        (*m)->items[i].y = read_sint16_le(&p, end);
+        (*m)->items[i].z = read_sint16_le(&p, end);
+        (*m)->items[i].visible = read_uint32_le(&p, end);
+        read_uint32_le(&p, end);
+    }
+}
+
+static void multi(int offset, int length, ml_multi **m)
+{
+    const char *end;
+    const char *p = file_map("files/multi.mul", &end);
+
+    assert(offset >= 0);
+    assert(length >= 0);
+    assert(p + offset + length <= end);
+
+    printf("offset: %d, length: %d\n", offset, length);
+
+    // do stuff...
+    parse_multi(p + offset, p + offset + length, m);
 
     file_unmap(p, end);
 }
@@ -901,7 +939,7 @@ static void parse_index(const char *p, const char *end, ml_index **idx)
         (*idx)->entries[i].offset = offset;
         (*idx)->entries[i].length = length;
         (*idx)->entries[i].extra = extra;
-        //printf("%d: offset: %d, length: %d, extra: %d\n", i, offset, length, extra);
+        //printf(" %d: offset: %d, length: %d, extra: %d\n", i, offset, length, extra);
     }
 }
 
@@ -909,6 +947,8 @@ static void index(const char *filename, ml_index **idx)
 {
     const char *end;
     const char *p = file_map(filename, &end);
+
+    //printf("index: %s\n", filename);
 
     parse_index(p, end, idx);
 
@@ -1211,6 +1251,7 @@ void ml_init()
     index("files/anim.idx"   , &anim_idx);
     index("files/artidx.mul" , &art_idx);
     index("files/Gumpidx.mul", &gump_idx);
+    index("files/multi.idx", &multi_idx);
     index("files/staidx0.mul", &statics0_blocks_idx);
     index("files/staidx1.mul", &statics1_blocks_idx);
     assert(anim_idx           != NULL);
@@ -1345,6 +1386,21 @@ ml_gump *ml_read_gump(int gump_id)
     gump(offset, length, width, height, &g);
 
     return g;
+}
+
+ml_multi *ml_read_multi(int multi_id)
+{
+    assert(ml_inited);
+
+    assert(multi_id >= 0 && multi_id < multi_idx->entry_count);
+
+    int offset = multi_idx->entries[multi_id].offset;
+    int length = multi_idx->entries[multi_id].length;
+    
+    ml_multi *m = NULL;
+    multi(offset, length, &m);
+
+    return m;
 }
 
 ml_land_block *ml_read_land_block(int map, int block_x, int block_y)

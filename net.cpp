@@ -2110,7 +2110,7 @@ void net_poll()
                     read_uint16_be(&p, end); // unknown
                     int type = read_uint8(&p, end); // 0 = item, 1 = multi
                     uint32_t serial = read_uint32_be(&p, end);
-                    int item_id = read_uint16_be(&p, end);
+                    int graphic_id = read_uint16_be(&p, end);
                     int direction = read_uint8(&p, end);
                     int amount = read_uint16_be(&p, end);
                     read_uint16_le(&p, end); // amount again?
@@ -2125,7 +2125,7 @@ void net_poll()
                     if (type == 0)
                     {
                         item_t *item = game_get_item(serial);
-                        item->item_id = item_id;
+                        item->item_id = graphic_id;
                         item->space = SPACETYPE_WORLD;
                         item->loc.world.x = x;
                         item->loc.world.y = y;
@@ -2134,8 +2134,12 @@ void net_poll()
                     }
                     else
                     {
-                        // TODO: add multi
                         printf("OMGOGMOGMOGM MULTI?!?!\n");
+                        multi_t *multi = game_get_multi(serial);
+                        multi->x = x;
+                        multi->y = y;
+                        multi->z = z;
+                        multi->multi_id = graphic_id;
                     }
 
                     break;

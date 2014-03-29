@@ -208,8 +208,9 @@ int pick_gump_widget(gump_t *gump, gump_widget_t *widget)
 
 long now;
 
-std::map<int, item_t *> items;
-std::map<int, mobile_t *> mobiles;
+std::map <int, item_t *> items;
+std::map <int, multi_t *> multis;
+std::map <int, mobile_t *> mobiles;
 std::list<gump_t *> gump_list;
 
 int draw_ceiling = 128;
@@ -336,6 +337,16 @@ static struct
         pixel_storage_t ps;
     } entries[0x10000];
 } gump_cache;
+
+static struct
+{
+    struct
+    {
+        bool valid;
+        bool fetching;
+        ml_multi *multi;
+    } entries[0x2000];
+} multi_cache;
 
 struct land_block_t
 {
@@ -558,6 +569,36 @@ pixel_storage_t *get_gump_ps(int gump_id)
     else
     {
         return &gump_cache.entries[gump_id].ps;
+    }
+}
+
+void write_multi(int multi_id, ml_multi *m)
+{
+    multi_cache.entries[multi_id].multi = m;
+
+    multi_cache.entries[multi_id].fetching = false;
+}
+
+ml_multi *get_multi(int multi_id)
+{
+    assert(multi_id >= 0 && multi_id < 0x10000);
+    if (!multi_cache.entries[multi_id].valid)
+    {
+        multi_cache.entries[multi_id].valid = true;
+        multi_cache.entries[multi_id].fetching = true;
+
+        printf("multi_cache       : loading %d\n", multi_id);
+
+        write_multi(multi_id, ml_read_multi(multi_id));
+    }
+
+    if (multi_cache.entries[multi_id].fetching)
+    {
+        return NULL;
+    }
+    else
+    {
+        return multi_cache.entries[multi_id].multi;
     }
 }
 
@@ -1111,6 +1152,24 @@ item_t *game_get_item(uint32_t serial)
     }
 }
 
+multi_t *game_get_multi(uint32_t serial)
+{
+    std::map<int, multi_t *>::iterator it = multis.find(serial);
+    if (it != multis.end())
+    {
+        return it->second;
+    }
+    else
+    {
+        assert(it == multis.end());
+        multi_t *m = (multi_t *)malloc(sizeof(multi_t));
+        memset(m, 0, sizeof(*m));
+        m->serial = serial;
+        multis[serial] = m;
+        return m;
+    }
+}
+
 mobile_t *game_get_mobile(uint32_t serial)
 {
     if (player.serial == serial)
@@ -1515,6 +1574,31 @@ void draw_world()
             if (item->space == SPACETYPE_WORLD)
             {
                 draw_world_item(item->item_id, item->loc.world.x, item->loc.world.y, item->loc.world.z, item->hue_id, pick_item(item));
+            }
+        }
+    }
+    // draw multis
+    {
+        std::map<int, multi_t *>::iterator it;
+        for (it = multis.begin(); it != multis.end(); ++it)
+        {
+            multi_t *multi = it->second;
+            ml_multi *m = get_multi(multi->multi_id);
+            if (m)
+            {
+                for (int i = 0; i < m->item_count; i++)
+                {
+                    int item_id = m->items[i].item_id;
+                    int x = multi->x + m->items[i].x;
+                    int y = multi->y + m->items[i].y;
+                    int z = multi->z + m->items[i].z;
+                    bool visible = m->items[i].visible;
+                    //assert(visible);
+                    if (visible)
+                    {
+                        draw_world_item(item_id, x, y, z, 0, pick_static(x, y, z, item_id));
+                    }
+                }
             }
         }
     }

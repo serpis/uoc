@@ -86,6 +86,17 @@ struct ml_gump
     uint16_t data[];
 };
 
+struct ml_multi
+{
+    int item_count;
+    struct
+    {
+        int item_id;
+        int x, y, z;
+        bool visible;
+    } items[];
+};
+
 struct ml_land_block
 {
     struct {
@@ -148,6 +159,7 @@ ml_anim *ml_read_anim(int body_id, int action, int direction);
 ml_art *ml_read_land_art(int land_id);
 ml_art *ml_read_static_art(int item_id);
 ml_gump *ml_read_gump(int gump_id);
+ml_multi *ml_read_multi(int multi_id);
 ml_land_block *ml_read_land_block(int map, int block_x, int block_y);
 ml_statics_block *ml_read_statics_block(int map, int block_x, int block_y);
 ml_art *ml_render_string(int font_id, std::wstring s);
