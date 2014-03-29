@@ -1273,6 +1273,27 @@ void net_poll()
 
                     break;
                 }
+                case 0x1c: {
+                    uint32_t serial = read_uint32_be(&p, end);
+                    int graphic = read_uint16_be(&p, end);
+                    read_uint8(&p, end); // type
+                    int hue = read_uint16_be(&p, end);
+                    int font_id = read_uint16_be(&p, end);
+                    char name[31];
+                    name[30] = '\0';
+                    read_ascii_fixed(&p, end, name, 30);
+                    std::wstring s;
+                    int remaining_bytes = end - p;
+                    int remaining_chars = remaining_bytes;
+                    for (int i = 0; i < remaining_chars; i++)
+                    {
+                        s += read_uint8(&p, end);
+                    }
+                    // TODO: do something with this text...
+                    printf("%s: ", name);
+                    std::wcout << s << std::endl;
+                    break;
+                }
                 case 0x1d: {
                     uint32_t serial = read_uint32_be(&p, end);
                     //printf("delete object %x\n", serial);
@@ -1650,6 +1671,30 @@ void net_poll()
                         }
                     }
 
+                    break;
+                }
+                case 0xae: {
+                    uint32_t serial = read_uint32_be(&p, end);
+                    int graphic = read_uint16_be(&p, end);
+                    read_uint8(&p, end); // type
+                    int hue = read_uint16_be(&p, end);
+                    int font_id = read_uint16_be(&p, end);
+                    char lang[5];
+                    char name[31];
+                    lang[4] = '\0';
+                    name[30] = '\0';
+                    read_ascii_fixed(&p, end, lang, 4);
+                    read_ascii_fixed(&p, end, name, 30);
+                    std::wstring s;
+                    int remaining_bytes = end - p;
+                    int remaining_chars = remaining_bytes / 2;
+                    for (int i = 0; i < remaining_chars; i++)
+                    {
+                        s += read_uint16_be(&p, end);
+                    }
+                    // TODO: do something with this text...
+                    printf("[%s] %s: ", lang, name);
+                    std::wcout << s << std::endl;
                     break;
                 }
                 case 0xbd: {
