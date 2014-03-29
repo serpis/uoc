@@ -134,6 +134,7 @@ struct gump_t
         struct
         {
             mobile_t *mobile;
+            std::wstring *name;
         } paperdoll;
         struct
         {
@@ -153,7 +154,7 @@ mobile_t *game_get_mobile(uint32_t serial);
 mobile_t *game_create_mobile(uint32_t serial);
 void game_delete_object(uint32_t serial);
 void game_show_container(uint32_t item_serial, int gump_id);
-void game_show_paperdoll(mobile_t *m);
+void game_show_paperdoll(mobile_t *m, std::wstring name);
 gump_t *game_create_generic_gump(uint32_t gump_serial, uint32_t gump_type_id, int x, int y);
 gump_t *game_get_container(uint32_t item_serial);
 void game_pick_up_rejected();

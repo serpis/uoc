@@ -1236,6 +1236,12 @@ void game_delete_gump(gump_t *gump)
         }
         delete gump->generic.widgets;
     }
+    else if (gump->type == GUMPTYPE_PAPERDOLL)
+    {
+        delete gump->paperdoll.name;
+        mobile_t *m = gump->paperdoll.mobile;
+        m->paperdoll_gump = NULL;
+    }
     else
     {
         assert(0 && "don't know how to delete this kind of gump");
@@ -1297,7 +1303,7 @@ void game_show_container(uint32_t item_serial, int gump_id)
     }
 }
 
-void game_show_paperdoll(mobile_t *m)
+void game_show_paperdoll(mobile_t *m, std::wstring name)
 {
     if (m->paperdoll_gump != NULL)
     {
@@ -1310,6 +1316,8 @@ void game_show_paperdoll(mobile_t *m)
         memset(paperdoll, 0, sizeof(gump_t));
         paperdoll->type = GUMPTYPE_PAPERDOLL;
         paperdoll->paperdoll.mobile = m;
+        paperdoll->paperdoll.name = new std::wstring;
+        *paperdoll->paperdoll.name = name;
         m->paperdoll_gump = paperdoll;
 
         gump_list.push_back(paperdoll);
@@ -1617,6 +1625,12 @@ void draw_gump_dynamic(int gump_id_base, int x, int y, int width, int height, in
     }
 }
 
+void draw_text(int x, int y, int font_id, std::wstring s, int pick_id)
+{
+    pixel_storage_t *ps = get_string_ps(font_id, s);
+    blit_ps(ps, x, y, gump_draw_order++, 0, pick_id);
+}
+
 void draw_paperdoll(gump_t *gump)
 {
 // <body-id> <paperdoll-gump-id> <offset for this body> <fallback offset>
@@ -1642,6 +1656,9 @@ void draw_paperdoll(gump_t *gump)
         draw_gump(2001, x, y, 0, pick_id);
     }
     // TODO: draw buttons
+
+    // name
+    draw_text(x + 40, y + 262, 0, *gump->paperdoll.name, pick_id);
 
     // body
     draw_gump(12, x, y + 20, m->hue_id, pick_id);
@@ -1679,12 +1696,6 @@ void draw_container(gump_t *container)
 
         draw_screen_item(item_id, x + dx, y + dy, hue_id, pick_item(item));
     }
-}
-
-void draw_text(int x, int y, int font_id, std::wstring s, int pick_id)
-{
-    pixel_storage_t *ps = get_string_ps(font_id, s);
-    blit_ps(ps, x, y, gump_draw_order++, 0, pick_id);
 }
 
 void draw_generic_gump(gump_t *gump)

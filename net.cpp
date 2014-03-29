@@ -264,6 +264,19 @@ static gump_command_t parse_gump_command(std::wstring command_str)
         std::wistringstream(tokens[6]) >> command.button.param;
         std::wistringstream(tokens[7]) >> command.button.button_id;
     }
+    else if (tokens[0] == L"xmfhtmlgump")
+    {
+        command.type = GUMPCMD_LOCALIZED;
+        std::wistringstream(tokens[1]) >> command.localized.x;
+        std::wistringstream(tokens[2]) >> command.localized.y;
+        std::wistringstream(tokens[3]) >> command.localized.width;
+        std::wistringstream(tokens[4]) >> command.localized.height;
+        std::wistringstream(tokens[5]) >> command.localized.cliloc_id;
+        std::wistringstream(tokens[6]) >> command.localized.background;
+        std::wistringstream(tokens[7]) >> command.localized.scrollbar;
+        command.localized.color = 0;
+        command.localized.arg_str = new std::wstring;
+    }
     else if (tokens[0] == L"xmfhtmlgumpcolor")
     {
         command.type = GUMPCMD_LOCALIZED;
@@ -1558,7 +1571,7 @@ void net_poll()
                     int flags = read_uint8(&p, end);
 
                     mobile_t *m = game_get_mobile(serial);
-                    game_show_paperdoll(m);
+                    game_show_paperdoll(m, decode_utf8_cstr(full_name));
 
                     break;
                 }
