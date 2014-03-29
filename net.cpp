@@ -25,6 +25,9 @@
 #include "game.hpp"
 #include "mullib.hpp" // only for ml_get_cliloc... move to game?
 
+// used to define address/port and username/password
+#include "account.hpp"
+
 static bool enable_compression = false;
 
 static int compress(char *dst, const char *dst_end, const char *src, const char *src_end);
@@ -1052,13 +1055,13 @@ void net_poll()
             if (do_account_login)
             {
                 send_prelogin(123);
-                send_account_login("admin", "lol");
+                send_account_login(LOGIN_USERNAME, LOGIN_PASSWORD);
                 do_account_login = false;
             }
             else
             {
                 send_prelogin(game_server_key);
-                send_game_server_login("admin", "lol", game_server_key);
+                send_game_server_login(LOGIN_USERNAME, LOGIN_PASSWORD, game_server_key);
             }
 
             just_connected = false;
@@ -1982,8 +1985,7 @@ void net_connect()
 {
     assert(inited);
     printf("connecting...\n");
-    sockfd = net_connect("192.168.1.226", 2593);
-    //sockfd = net_connect("login.uoancorp.com", 2593);
+    sockfd = net_connect(LOGIN_ADDRESS, LOGIN_PORT);
     printf("ok!\n");
     if (sockfd == -1)
     {
