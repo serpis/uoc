@@ -332,6 +332,17 @@ static gump_command_t parse_gump_command(std::wstring command_str)
         std::wistringstream(tokens[3]) >> command.label.hue_id;
         std::wistringstream(tokens[4]) >> command.label.text_id;
     }
+    else if (tokens[0] == L"croppedtext")
+    {
+        command.type = GUMPCMD_LABEL;
+        std::wistringstream(tokens[1]) >> command.label.x;
+        std::wistringstream(tokens[2]) >> command.label.y;
+        int width, height;
+        std::wistringstream(tokens[3]) >> width;
+        std::wistringstream(tokens[4]) >> width;
+        std::wistringstream(tokens[5]) >> command.label.hue_id;
+        std::wistringstream(tokens[6]) >> command.label.text_id;
+    }
     else if (tokens[0] == L"tilepic")
     {
         command.type = GUMPCMD_ITEM;
@@ -407,7 +418,17 @@ static std::wstring cliloc_format_resolve(std::wstring format, std::vector<std::
             arg_idx -= 1;
             assert(arg_idx >= 0 && arg_idx < args.size());
 
-            res += args[arg_idx];
+            std::wstring arg = args[arg_idx];
+
+            // resolve any clilocs in argument list
+            if (arg.length() > 0 && arg[0] == L'#')
+            {
+                int arg_cliloc_id;
+                std::wistringstream(arg.substr(1)) >> arg_cliloc_id;
+                arg = decode_utf8_cstr(ml_get_cliloc(arg_cliloc_id));
+            }
+
+            res += arg;
 
             // skip rest of arg in format string
             long next_tilde = format.find('~', i+1);
@@ -2045,17 +2066,6 @@ void net_poll()
                                 std::wstring format = decode_utf8_cstr(ml_get_cliloc(command.localized.cliloc_id));
                                 std::vector<std::wstring> args = split(*command.localized.arg_str, L'\t');
                                 delete command.localized.arg_str;
-                                // resolve any clilocs in argument list
-                                for (int i = 0; i < args.size(); i++)
-                                {
-                                    if (args[i][0] == L'#')
-                                    {
-                                        int arg_cliloc_id;
-                                        std::wistringstream(args[i].substr(1)) >> arg_cliloc_id;
-                                        args[i] = decode_utf8_cstr(ml_get_cliloc(arg_cliloc_id));
-                                        //args[i] = cstr_to_wstring(ml_get_cliloc(arg_cliloc_id));
-                                    }
-                                }
                                 std::wstring res = cliloc_format_resolve(format, args);
                                 int font_id = 1;
                                 std::list<std::wstring> strs = massage_text(font_id, command.localized.width, res);
