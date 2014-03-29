@@ -807,6 +807,18 @@ void net_send_gump_response(uint32_t serial, uint32_t gump_type_id, int response
     send_packet(data, p);
 }
 
+void net_send_razor_ack()
+{
+    char data[4];
+    char *p = data;
+    char *end = p + sizeof(data);
+    write_uint8(&p, end, 0xf0);
+    write_uint16_be(&p, end, 4);
+    write_uint8(&p, end, 0xff);
+    assert(p == end);
+    send_packet(data, end);
+}
+
 extern int huffman_tree[256][2];
 
 void find_parent(int n, int *from, int *bit)
@@ -1924,11 +1936,13 @@ void net_poll()
                     break;
                 }
                 case 0xf0: {
-                    int ack = read_uint8(&p, end);
-                    printf("krrios client ack: %d '%s'\n", ack, ack == 0 ? "unauthed" :
-                                                                ack == 1 ? "ok, GM"   : 
-                                                                ack == 2 ? "ok, player" :
-                                                                "unknown");
+                    int type = read_uint8(&p, end);
+                    if (type == 0xfe)
+                    {
+                        uint64_t features_disallowed = read_uint64_le(&p, end);
+                        printf("received razor feature control packet. features disallowed: %lx\n", features_disallowed);
+                        net_send_razor_ack();
+                    }
 
                     break;
                 }
@@ -2010,11 +2024,13 @@ void net_init()
     packet_lengths[0x20] = 19; // update mobile
     packet_lengths[0x21] = 8; // move reject
     packet_lengths[0x22] = 3; // move accept
+    packet_lengths[0x23] = 26; // display drag effect
     packet_lengths[0x24] = 7; // display container
     packet_lengths[0x25] = 21; // update container
     packet_lengths[0x27] = 2; // reject pick up
     packet_lengths[0x2c] = 2; // death status
     packet_lengths[0x2e] = 15; // equip update
+    packet_lengths[0x2f] = 10; // fight occurring (swing)
     packet_lengths[0x3a] = 0; // skills
     packet_lengths[0x3c] = 0; // container contents
     packet_lengths[0x4e] = 6; // set personal light level
@@ -2054,7 +2070,7 @@ void net_init()
     packet_lengths[0xdc] = 9; // item revision
     packet_lengths[0xdd] = 0; // display gump packed
     packet_lengths[0xdf] = 0; // "buff/debuff system" <- what is this?
-    packet_lengths[0xf0] = 0; // krrios client special
+    packet_lengths[0xf0] = 0; // protocol extensions
     packet_lengths[0xf3] = 24; // add item (new version)
 
     assert(!inited);
