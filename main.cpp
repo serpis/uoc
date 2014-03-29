@@ -1566,6 +1566,55 @@ void draw_gump_tiled(int gump_id, int x, int y, int width, int height, int hue_i
     }
 }
 
+void draw_gump_dynamic(int gump_id_base, int x, int y, int width, int height, int hue_id, int pick_id)
+{
+    pixel_storage_t *pss[3];
+    pss[0] = get_gump_ps(gump_id_base + 0);
+    pss[1] = get_gump_ps(gump_id_base + 2);
+    pss[2] = get_gump_ps(gump_id_base + 6);
+
+    // first make sure all pss are loaded
+    for (int i = 0; i < 3; i++)
+    {
+        if (!pss[i])
+        {
+            return;
+        }
+    }
+
+    int ws[3];
+    ws[0] = pss[0]->width;
+    ws[2] = pss[1]->width;
+    ws[1] = width - ws[2] - ws[0];
+
+    int hs[3];
+    hs[0] = pss[0]->height;
+    hs[2] = pss[2]->height;
+    hs[1] = height - hs[2] - hs[0];
+
+    int dxs[3] = { 0, ws[0], ws[0] + ws[1] };
+    int dys[3] = { 0, hs[0], hs[0] + hs[1] };
+
+    for (int i = 0; i < 9; i++)
+    {
+        int grid_x = i % 3;
+        int grid_y = i / 3;
+
+        int draw_x = x + dxs[grid_x];
+        int draw_y = y + dys[grid_y];
+
+        bool corner = (grid_x % 2) == 0 && (grid_y % 2) == 0;
+        if (corner)
+        {
+            draw_gump(gump_id_base + i, draw_x, draw_y, hue_id, pick_id);
+        }
+        else
+        {
+            draw_gump_tiled(gump_id_base + i, draw_x, draw_y, ws[grid_x], hs[grid_y], hue_id, pick_id);
+        }
+    }
+}
+
 void draw_paperdoll(gump_t *gump)
 {
 // <body-id> <paperdoll-gump-id> <offset for this body> <fallback offset>
@@ -1657,9 +1706,17 @@ void draw_generic_gump(gump_t *gump)
             {
                 draw_gump_tiled(widget.pictiled.gump_id, x + widget.pictiled.x, y + widget.pictiled.y, widget.pictiled.width, widget.pictiled.height, 0, pick_id);
             }
+            else if (widget.type == GUMPWTYPE_RESIZEPIC)
+            {
+                draw_gump_dynamic(widget.resizepic.gump_id_base, x + widget.resizepic.x, y + widget.resizepic.y, widget.resizepic.width, widget.resizepic.height, 0, pick_id);
+            }
             else if (widget.type == GUMPWTYPE_BUTTON)
             {
                 draw_gump(widget.button.up_gump_id, x + widget.button.x, y + widget.button.y, 0, pick_gump_widget(gump, &widget));
+            }
+            else if (widget.type == GUMPWTYPE_ITEM)
+            {
+                draw_screen_item(widget.item.item_id, x + widget.item.x, y + widget.item.y, widget.item.hue_id, pick_id);
             }
             else if (widget.type == GUMPWTYPE_TEXT)
             {

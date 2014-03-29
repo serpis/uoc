@@ -62,10 +62,12 @@ struct item_t
     } loc;
 };
 
-const int GUMPWTYPE_PIC      = 0;
-const int GUMPWTYPE_PICTILED = 1;
-const int GUMPWTYPE_BUTTON   = 2;
-const int GUMPWTYPE_TEXT     = 3;
+const int GUMPWTYPE_PIC       = 0;
+const int GUMPWTYPE_PICTILED  = 1;
+const int GUMPWTYPE_RESIZEPIC = 2;
+const int GUMPWTYPE_BUTTON    = 3;
+const int GUMPWTYPE_ITEM      = 4;
+const int GUMPWTYPE_TEXT      = 5;
 struct gump_widget_t
 {
     int page;
@@ -86,11 +88,23 @@ struct gump_widget_t
         struct
         {
             int x, y;
+            int width, height;
+            int gump_id_base;
+        } resizepic;
+        struct
+        {
+            int x, y;
             int up_gump_id, down_gump_id;
             int type;
             int param;
             int button_id;
         } button;
+        struct
+        {
+            int x, y;
+            int item_id;
+            int hue_id;
+        } item;
         struct
         {
             int x, y;

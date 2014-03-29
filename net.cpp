@@ -93,12 +93,17 @@ static std::wstring decode_utf8_cstr(const char *s)
     return ws;
 }*/
 
-const int GUMPCMD_NOCLOSE   = 0;
-const int GUMPCMD_PAGE      = 1;
-const int GUMPCMD_PIC       = 2;
-const int GUMPCMD_PICTILED  = 3;
-const int GUMPCMD_BUTTON    = 4;
-const int GUMPCMD_LOCALIZED = 5;
+const int GUMPCMD_NOCLOSE   =  0;
+const int GUMPCMD_NORESIZE  =  1;
+const int GUMPCMD_PAGE      =  2;
+const int GUMPCMD_PIC       =  3;
+const int GUMPCMD_PICTILED  =  4;
+const int GUMPCMD_RESIZEPIC =  5;
+const int GUMPCMD_BUTTON    =  6;
+const int GUMPCMD_ITEM      =  7;
+const int GUMPCMD_LABEL     =  8;
+const int GUMPCMD_FREETEXT  =  9;
+const int GUMPCMD_LOCALIZED = 10;
 struct gump_command_t
 {
     int type;
@@ -122,11 +127,37 @@ struct gump_command_t
         struct
         {
             int x, y;
+            int width, height;
+            int gump_id_base;
+        } resizepic;
+        struct
+        {
+            int x, y;
             int up_gump_id, down_gump_id;
             int type;
             int param;
             int button_id;
         } button;
+        struct
+        {
+            int x, y;
+            int item_id;
+            int hue_id;
+        } item;
+        struct
+        {
+            int x, y;
+            int hue_id;
+            int text_id;
+        } label;
+        struct
+        {
+            int x, y;
+            int width, height;
+            int text_id;
+            int background;
+            int scrollbar;
+        } free_text;
         struct
         {
             int x, y;
@@ -194,6 +225,10 @@ static gump_command_t parse_gump_command(std::wstring command_str)
     {
         command.type = GUMPCMD_NOCLOSE;
     }
+    else if (tokens[0] == L"noresize")
+    {
+        command.type = GUMPCMD_NORESIZE;
+    }
     else if (tokens[0] == L"page")
     {
         command.type = GUMPCMD_PAGE;
@@ -252,6 +287,55 @@ static gump_command_t parse_gump_command(std::wstring command_str)
         std::wistringstream(tokens[8]) >> command.localized.cliloc_id;
         command.localized.arg_str = new std::wstring;
         *command.localized.arg_str = tokens[9];
+    }
+    else if (tokens[0] == L"resizepic")
+    {
+        command.type = GUMPCMD_RESIZEPIC;
+        std::wistringstream(tokens[1]) >> command.resizepic.x;
+        std::wistringstream(tokens[2]) >> command.resizepic.y;
+        std::wistringstream(tokens[3]) >> command.resizepic.gump_id_base;
+        std::wistringstream(tokens[4]) >> command.resizepic.width;
+        std::wistringstream(tokens[5]) >> command.resizepic.height;
+    }
+    else if (tokens[0] == L"htmlgump")
+    {
+        command.type = GUMPCMD_FREETEXT;
+        std::wistringstream(tokens[1]) >> command.free_text.x;
+        std::wistringstream(tokens[2]) >> command.free_text.y;
+        std::wistringstream(tokens[3]) >> command.free_text.width;
+        std::wistringstream(tokens[4]) >> command.free_text.height;
+        std::wistringstream(tokens[5]) >> command.free_text.text_id;
+        std::wistringstream(tokens[6]) >> command.free_text.background;
+        std::wistringstream(tokens[7]) >> command.free_text.scrollbar;
+    }
+    else if (tokens[0] == L"text")
+    {
+        command.type = GUMPCMD_LABEL;
+        std::wistringstream(tokens[1]) >> command.label.x;
+        std::wistringstream(tokens[2]) >> command.label.y;
+        std::wistringstream(tokens[3]) >> command.label.hue_id;
+        std::wistringstream(tokens[4]) >> command.label.text_id;
+    }
+    else if (tokens[0] == L"tilepic")
+    {
+        command.type = GUMPCMD_ITEM;
+        std::wistringstream(tokens[1]) >> command.item.x;
+        std::wistringstream(tokens[2]) >> command.item.y;
+        std::wistringstream(tokens[3]) >> command.item.item_id;
+        command.item.hue_id = 0;
+    }
+    else if (tokens[0] == L"tilepichue")
+    {
+        command.type = GUMPCMD_ITEM;
+        std::wistringstream(tokens[1]) >> command.item.x;
+        std::wistringstream(tokens[2]) >> command.item.y;
+        std::wistringstream(tokens[3]) >> command.item.item_id;
+        std::wistringstream(tokens[3]) >> command.item.hue_id;
+    }
+    else if (tokens[0] == L"checkertrans")
+    {
+        // TODO: handle this properly
+        command.type = GUMPCMD_NOCLOSE;
     }
     else
     {
@@ -1611,10 +1695,14 @@ void net_poll()
                     int x = read_uint32_be(&p, end);
                     int y = read_uint32_be(&p, end);
 
-                    unsigned long decompressed_layout_length;
-                    char *decompressed_layout_data;
+                    std::list<gump_command_t> commands;
+                    std::vector<std::wstring> lines;
 
+                    // read commands
                     {
+                        unsigned long decompressed_layout_length;
+                        char *decompressed_layout_data;
+
                         int compressed_layout_length = read_sint32_be(&p, end)-4;
                         printf("compressed_layout_length: %d\n", compressed_layout_length);
                         decompressed_layout_length = read_sint32_be(&p, end);
@@ -1628,12 +1716,60 @@ void net_poll()
                                           (unsigned char *)compressed_layout_data  , compressed_layout_length) == Z_OK);
 
                         std::wstring all_commands_str = decode_utf8_cstr(decompressed_layout_data);
-                        std::list<gump_command_t> commands = parse_gump_commands(all_commands_str);
+                        commands = parse_gump_commands(all_commands_str);
                         printf("commands: %d\n", (int)commands.size());
 
                         free(compressed_layout_data);
                         free(decompressed_layout_data);
+                    }
 
+                    // read lines
+                    {
+                        int text_line_count = read_uint32_be(&p, end);
+
+                        int compressed_text_length = read_sint32_be(&p, end) - 4;
+
+                        if (compressed_text_length > 0)
+                        {
+                            unsigned long decompressed_text_length;
+                            char *decompressed_text_data;
+
+                            decompressed_text_length = read_sint32_be(&p, end);
+
+                            char *compressed_text_data = (char *)malloc(compressed_text_length);
+                            decompressed_text_data = (char *)malloc(decompressed_text_length);
+                            read_chunk(&p, end, compressed_text_data, compressed_text_length);
+
+                            assert(uncompress((unsigned char *)decompressed_text_data, &decompressed_text_length,
+                                              (unsigned char *)compressed_text_data  , compressed_text_length) == Z_OK);
+
+                            {
+                                const char *tp = decompressed_text_data;
+                                const char *tend = decompressed_text_data + decompressed_text_length;
+                                for (int i = 0; i < text_line_count; i++)
+                                {
+                                    std::wstring s;
+                                    int len = read_uint16_be(&tp, tend);
+                                    for (int j = 0; j < len; j++)
+                                    {
+                                        int c = read_uint16_be(&tp, tend);
+                                        s += c;
+                                    }
+                                    lines.push_back(s);
+                                }
+                            }
+
+                            free(compressed_text_data);
+                            free(decompressed_text_data);
+                        }
+                        else
+                        {
+                            compressed_text_length = 0;
+                        }
+                    }
+
+                    // parse commands
+                    {
                         int current_page = 0;
 
                         gump_t *gump = game_create_generic_gump(serial, gump_type_id, x, y);
@@ -1666,6 +1802,18 @@ void net_poll()
                                 widget.pictiled.gump_id = command.pictiled.gump_id;
                                 gump->generic.widgets->push_back(widget);
                             }
+                            else if (command.type == GUMPCMD_RESIZEPIC)
+                            {
+                                gump_widget_t widget;
+                                widget.page = current_page;
+                                widget.type = GUMPWTYPE_RESIZEPIC;
+                                widget.resizepic.x = command.resizepic.x;
+                                widget.resizepic.y = command.resizepic.y;
+                                widget.resizepic.width = command.resizepic.width;
+                                widget.resizepic.height = command.resizepic.height;
+                                widget.resizepic.gump_id_base = command.resizepic.gump_id_base;
+                                gump->generic.widgets->push_back(widget);
+                            }
                             else if (command.type == GUMPCMD_BUTTON)
                             {
                                 gump_widget_t widget;
@@ -1679,6 +1827,51 @@ void net_poll()
                                 widget.button.param = command.button.param;
                                 widget.button.button_id = command.button.button_id;
                                 gump->generic.widgets->push_back(widget);
+                            }
+                            else if (command.type == GUMPCMD_ITEM)
+                            {
+                                gump_widget_t widget;
+                                widget.page = current_page;
+                                widget.type = GUMPWTYPE_ITEM;
+                                widget.item.x = command.item.x;
+                                widget.item.y = command.item.y;
+                                widget.item.item_id = command.item.item_id;
+                                widget.item.hue_id = command.item.hue_id;
+                                gump->generic.widgets->push_back(widget);
+                            }
+                            else if (command.type == GUMPCMD_LABEL)
+                            {
+                                int font_id = 1;
+                                gump_widget_t widget;
+                                widget.page = current_page;
+                                widget.type = GUMPWTYPE_TEXT;
+                                widget.text.x = command.label.x;
+                                widget.text.y = command.label.y;
+                                widget.text.font_id = font_id;
+                                widget.text.text = new std::wstring;
+                                *widget.text.text = lines[command.label.text_id];
+                                gump->generic.widgets->push_back(widget);
+                            }
+                            else if (command.type == GUMPCMD_FREETEXT)
+                            {
+                                int font_id = 1;
+                                std::list<std::wstring> strs = massage_text(font_id, command.free_text.width, lines[command.free_text.text_id]);
+                                int y = command.free_text.y;
+                                int line_height = 20;
+                                for (std::list<std::wstring>::iterator it = strs.begin(); it != strs.end(); ++it)
+                                {
+                                    gump_widget_t widget;
+                                    widget.page = current_page;
+                                    widget.type = GUMPWTYPE_TEXT;
+                                    widget.text.x = command.free_text.x;
+                                    widget.text.y = y;
+                                    widget.text.font_id = font_id;
+                                    widget.text.text = new std::wstring();
+                                    *widget.text.text = *it;
+                                    gump->generic.widgets->push_back(widget);
+
+                                    y += line_height;
+                                }
                             }
                             else if (command.type == GUMPCMD_LOCALIZED)
                             {
@@ -1722,40 +1915,8 @@ void net_poll()
                             {
                                 //assert(0 && "unhandled command");
                             }
-                            //gump->generic.widgets->
                         }
                     }
-
-                    unsigned long decompressed_text_length;
-                    char *decompressed_text_data;
-
-                    {
-                        int text_line_count = read_uint32_be(&p, end);
-
-                        int compressed_text_length = read_sint32_be(&p, end);
-
-                        if (compressed_text_length > 0)
-                        {
-                            decompressed_text_length = read_sint32_be(&p, end);
-
-                            char *compressed_text_data = (char *)malloc(compressed_text_length);
-                            decompressed_text_data = (char *)malloc(decompressed_text_length);
-                            read_chunk(&p, end, compressed_text_data, compressed_text_length);
-
-                            assert(uncompress((unsigned char *)decompressed_text_data, &decompressed_text_length,
-                                              (unsigned char *)compressed_text_data  , compressed_text_length) == Z_OK);
-
-                            // TODO: do something with decompressed text data
-
-                            free(compressed_text_data);
-                            free(decompressed_text_data);
-                        }
-                        else
-                        {
-                            compressed_text_length = 0;
-                        }
-                    }
-
 
                     break;
                 }
