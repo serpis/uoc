@@ -359,6 +359,11 @@ static gump_command_t parse_gump_command(std::wstring command_str)
         std::wistringstream(tokens[3]) >> command.item.item_id;
         std::wistringstream(tokens[3]) >> command.item.hue_id;
     }
+    else if (tokens[0] == L"checkbox")
+    {
+        // TODO: handle this properly
+        command.type = GUMPCMD_NOCLOSE;
+    }
     else if (tokens[0] == L"checkertrans")
     {
         // TODO: handle this properly

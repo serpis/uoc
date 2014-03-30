@@ -828,7 +828,19 @@ void world_to_screen(int world_x, int world_y, int world_z, int *screen_x, int *
 
 int world_draw_prio(int world_x, int world_y, int world_z)
 {
-    int prio = 256 * world_x + 256 * world_y + (world_z + 128);
+    int world_dx = world_x - player.x;
+    int world_dy = world_y - player.y;
+
+    world_dx += 32;
+    world_dy += 32;
+    world_z += 128;
+
+    assert(world_dx >= 0 && world_dx < 64);
+    assert(world_dy >= 0 && world_dy < 64);
+    assert(world_z >= 0 && world_z < 256);
+
+    // 32 layers, 2 types of foliage (is foliage/is not foliage)
+    int prio = 2 * 32 * (64 * world_dx + 64 * world_dy + world_z);
     return prio;
 }
 
@@ -903,7 +915,7 @@ void draw_world_land_ps(pixel_storage_t *ps, int x, int y, int pick_id)
     gfx_render(ps, xs, ys, world_draw_prio(x, y, min_z-1), 0, pick_id);
 }
 
-void draw_world_art_ps(pixel_storage_t *ps, int x, int y, int z, int height, int hue_id, int pick_id)
+void draw_world_art_ps(pixel_storage_t *ps, int x, int y, int z, int height, int bonus_prio, int hue_id, int pick_id)
 {
     if (z >= draw_ceiling)
     {
@@ -919,10 +931,10 @@ void draw_world_art_ps(pixel_storage_t *ps, int x, int y, int z, int height, int
     screen_y -= ps->height;
     // statics tiles are shifted half a world unit downwards
     screen_y += 22;
-    blit_ps(ps, screen_x, screen_y, world_draw_prio(x, y, z+height), hue_id, pick_id);
+    blit_ps(ps, screen_x, screen_y, world_draw_prio(x, y, z) + bonus_prio, hue_id, pick_id);
 }
 
-void draw_world_anim_frame(anim_frame_t *frame, bool flip, int x, int y, int z, int hue_id, int pick_id)
+void draw_world_anim_frame(anim_frame_t *frame, bool flip, int x, int y, int z, int layer_prio, int hue_id, int pick_id)
 {
     pixel_storage_t *ps = &frame->ps;
     int screen_x;
@@ -936,13 +948,13 @@ void draw_world_anim_frame(anim_frame_t *frame, bool flip, int x, int y, int z, 
     {
         // offset by frame's center in x
         screen_x -= (frame->ps.width - frame->center_x - 1);
-        blit_ps_flipped(ps, screen_x, screen_y, world_draw_prio(x, y, z), hue_id, pick_id);
+        blit_ps_flipped(ps, screen_x, screen_y, world_draw_prio(x, y, z) + layer_prio, hue_id, pick_id);
     }
     else
     {
         // offset by frame's center in x
         screen_x -= frame->center_x;
-        blit_ps(ps, screen_x, screen_y, world_draw_prio(x, y, z), hue_id, pick_id);
+        blit_ps(ps, screen_x, screen_y, world_draw_prio(x, y, z) + layer_prio, hue_id, pick_id);
     }
 }
 
@@ -996,11 +1008,12 @@ void draw_world_item(int item_id, int x, int y, int z, int hue_id, int pick_id)
     if (ps)
     {
         int height = ml_get_item_data(item_id)->height;
-        draw_world_art_ps(ps, x, y, z, height, hue_id, pick_id);
+        bool is_foliage = (ml_get_item_data(item_id)->flags & TILEFLAG_FOLIAGE) != 0;
+        draw_world_art_ps(ps, x, y, z, height, is_foliage ? 32 : 0, hue_id, pick_id);
     }
 }
 
-void draw_world_anim(int body_id, int action, long action_start, int direction, int x, int y, int z, int hue_id, int pick_id)
+void draw_world_anim(int body_id, int action, long action_start, int direction, int x, int y, int z, int layer_prio, int hue_id, int pick_id)
 {
     int frame_count;
     bool flip = false;
@@ -1014,7 +1027,7 @@ void draw_world_anim(int body_id, int action, long action_start, int direction, 
     // TODO: this null check shouldn't be necessary
     if (frames)
     {
-        draw_world_anim_frame(&frames[((now-action_start) / 200) % frame_count], flip, x, y, z, hue_id, pick_id);
+        draw_world_anim_frame(&frames[((now-action_start) / 200) % frame_count], flip, x, y, z, layer_prio, hue_id, pick_id);
     }
 }
 
@@ -1060,7 +1073,7 @@ void draw_world_mobile(mobile_t *mobile, int pick_id)
         }
     }
 
-    draw_world_anim(mobile->body_id, action_id, action_start, mobile->dir, mobile->x, mobile->y, mobile->z, mobile->hue_id, pick_id);
+    draw_world_anim(mobile->body_id, action_id, action_start, mobile->dir, mobile->x, mobile->y, mobile->z, 0, mobile->hue_id, pick_id);
     for (int i = 0; i < 32; i++)
     {
         int layer = layer_draw_order[i];
@@ -1073,7 +1086,7 @@ void draw_world_mobile(mobile_t *mobile, int pick_id)
             if (item_data->animation != 0)
             {
                 //printf("drawing anim for item_id %d (%s)\n", item_id, item_data->name);
-                draw_world_anim(item_data->animation, action_id, action_start, mobile->dir, mobile->x, mobile->y, mobile->z, hue_id, pick_id);
+                draw_world_anim(item_data->animation, action_id, action_start, mobile->dir, mobile->x, mobile->y, mobile->z, i, hue_id, pick_id);
             }
         }
     }
@@ -1542,6 +1555,13 @@ bool has_roof(int map, int p_x, int p_y)
     return false;
 }
 
+bool is_in_draw_range(int x, int y, int z)
+{
+    int dx = player.x - x;
+    int dy = player.y - y;
+    return std::max(std::abs(dx), std::abs(dy)) <= 18;
+}
+
 void draw_world()
 {
     int world_center_block_x = player.x / 8;
@@ -1573,7 +1593,10 @@ void draw_world()
             item_t *item = it->second;
             if (item->space == SPACETYPE_WORLD)
             {
-                draw_world_item(item->item_id, item->loc.world.x, item->loc.world.y, item->loc.world.z, item->hue_id, pick_item(item));
+                if (is_in_draw_range(item->loc.world.x, item->loc.world.y, item->loc.world.z))
+                {
+                    draw_world_item(item->item_id, item->loc.world.x, item->loc.world.y, item->loc.world.z, item->hue_id, pick_item(item));
+                }
             }
         }
     }
@@ -1596,7 +1619,10 @@ void draw_world()
                     //assert(visible);
                     if (visible)
                     {
-                        draw_world_item(item_id, x, y, z, 0, pick_static(x, y, z, item_id));
+                        if (is_in_draw_range(x, y, z))
+                        {
+                            draw_world_item(item_id, x, y, z, 0, pick_static(x, y, z, item_id));
+                        }
                     }
                 }
             }
@@ -1607,7 +1633,11 @@ void draw_world()
         std::map<int, mobile_t *>::iterator it;
         for (it = mobiles.begin(); it != mobiles.end(); ++it)
         {
-            draw_world_mobile(it->second, pick_mobile(it->second));
+            mobile_t *mobile = it->second;
+            if (is_in_draw_range(mobile->x, mobile->y, mobile->z))
+            {
+                draw_world_mobile(mobile, pick_mobile(mobile));
+            }
         }
     }
     // draw character

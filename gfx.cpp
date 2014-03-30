@@ -579,7 +579,7 @@ void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hu
     {
         cmd.pos[i][0] = xs[i];
         cmd.pos[i][1] = ys[i];
-        cmd.pos[i][2] = draw_prio / 5000000.0f;
+        cmd.pos[i][2] = draw_prio / 500000.0f;
     }
     for (int i = 0; i < 4; i++)
     {
