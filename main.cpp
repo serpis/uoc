@@ -2106,7 +2106,10 @@ int main()
             fps = frames;
             SDL_SetWindowTitle(main_window, title);
 
-            next_fps += 1000;
+            while (now > next_fps)
+            {
+                next_fps += 1000;
+            }
             frames = 0;
         }
         frames += 1;
