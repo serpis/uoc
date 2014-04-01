@@ -1282,7 +1282,6 @@ void game_delete_item(item_t *item)
 
 void game_delete_gump(gump_t *gump)
 {
-
     if (gump->type == GUMPTYPE_CONTAINER)
     {
         // delete all contained items
@@ -2442,16 +2441,20 @@ int main()
                         {
                             net_send_gump_response(gump->generic.serial, gump->generic.type_id, 0);
                             game_delete_gump(gump);
-
-                            // let go of any gumps.
-                            if (dragging.type == DRAGTYPE_GUMP)
-                            {
-                                dragging.type = DRAGTYPE_NONE;
-                            }
+                        }
+                        else if (gump->type == GUMPTYPE_PAPERDOLL)
+                        {
+                            game_delete_gump(gump);
                         }
                         else
                         {
                             printf("TODO: figure out how to close this kind of gump\n");
+                        }
+
+                        // let go of any gumps.
+                        if (dragging.type == DRAGTYPE_GUMP)
+                        {
+                            dragging.type = DRAGTYPE_NONE;
                         }
                     }
                     else
