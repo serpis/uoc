@@ -2436,7 +2436,23 @@ int main()
                 {
                     if (pick_target != NULL && pick_target->type == TYPE_GUMP)
                     {
-                        // TODO: close gump
+                        gump_t *gump = pick_target->gump_widget.gump;
+
+                        if (gump->type == GUMPTYPE_GENERIC)
+                        {
+                            net_send_gump_response(gump->generic.serial, gump->generic.type_id, 0);
+                            game_delete_gump(gump);
+
+                            // let go of any gumps.
+                            if (dragging.type == DRAGTYPE_GUMP)
+                            {
+                                dragging.type = DRAGTYPE_NONE;
+                            }
+                        }
+                        else
+                        {
+                            printf("TODO: figure out how to close this kind of gump\n");
+                        }
                     }
                     else
                     {
