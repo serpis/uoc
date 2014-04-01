@@ -562,6 +562,7 @@ int net_connect(const char *address, int port)
 
         if (connect(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
             close(sockfd);
+            sockfd = -1;
             perror("client: connect");
             continue;
         }
@@ -2245,6 +2246,17 @@ void net_init()
 
     assert(!inited);
     inited = true;
+}
+
+void net_shutdown()
+{
+    if (sockfd != -1)
+    {
+        close(sockfd);
+        sockfd = -1;
+    }
+
+    inited = false;
 }
 
 int huffman_tree[256][2] = {

@@ -177,6 +177,9 @@ void mlt_read_gump(int gump_id, void (*callback)(int gump_id, ml_gump *g));
 void mlt_read_land_block(int map, int block_x, int block_y, void (*callback)(int map, int block_x, int block_y, ml_land_block *lb));
 void mlt_read_statics_block(int map, int block_x, int block_y, void (*callback)(int map, int block_x, int block_y, ml_statics_block *sb));
 
+void mlt_stop_worker_thread();
+bool mlt_still_working();
+
 // run this on the thread where you want the responses
 void mlt_process_callbacks();
 

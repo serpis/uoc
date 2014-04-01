@@ -1230,9 +1230,18 @@ mobile_t *game_create_mobile(uint32_t serial)
 // and cooperate to clean up all traces of objects and their children
 // this cleaning up including removing objects from the global lists and
 // freeing any dynamically allocated objects
+void game_delete_item(item_t *item);
 void game_delete_mobile(mobile_t *mobile)
 {
-    // TODO: delete all equipped items, gumps etc
+    // TODO: delete all gumps etc
+    for (int i = 0; i < 32; i++)
+    {
+        if (mobile->equipped_items[i] != NULL)
+        {
+            // item will remove itself from the mobile's equipped items
+            game_delete_item(mobile->equipped_items[i]);
+        }
+    }
 
     std::map<int, mobile_t *>::iterator it = mobiles.find(mobile->serial);
     assert(it != mobiles.end());
@@ -1285,9 +1294,10 @@ void game_delete_gump(gump_t *gump)
     if (gump->type == GUMPTYPE_CONTAINER)
     {
         // delete all contained items
-        for (std::list<item_t *>::iterator it = gump->container.items->begin(); it != gump->container.items->end(); ++it)
+        while (gump->container.items->size() > 0)
         {
-            item_t *item = *it;
+            // item will remove itself from this container's item list
+            item_t *item = *gump->container.items->begin();
             game_delete_item(item);
         }
         delete gump->container.items;
@@ -2682,7 +2692,52 @@ int main()
         cnt_glbegin = 0;
         cnt_glend = 0;
     }
- 
+
+    // disconnect
+    net_shutdown();
+
+    // shut down work thread
+    mlt_stop_worker_thread();
+
+    // drain any remaining jobs
+    while (mlt_still_working())
+    {
+        printf("draining...\n");
+        mlt_process_callbacks();
+        SDL_Delay(100);
+    }
+
+    // clean up world objects
+    while (gump_list.size() > 0)
+    {
+        std::list<gump_t *>::iterator it = gump_list.begin();
+        gump_t *gump = *it;
+        game_delete_gump(gump);
+        //gump_list.erase(it);
+    }
+    while (multis.size() > 0)
+    {
+        std::map<int, multi_t *>::iterator it = multis.begin();
+        multi_t *multi = it->second;
+        // no special delete function
+        delete multi;
+        multis.erase(it);
+    }
+    while (items.size() > 0)
+    {
+        std::map<int, item_t *>::iterator it = items.begin();
+        item_t *item = it->second;
+        game_delete_item(item);
+        //items.erase(it);
+    }
+    while (mobiles.size() > 0)
+    {
+        std::map<int, mobile_t *>::iterator it = mobiles.begin();
+        mobile_t *mobile = it->second;
+        game_delete_mobile(mobile);
+        //mobiles.erase(it);
+    }
+
     SDL_GL_DeleteContext(main_context);
     SDL_DestroyWindow(main_window);
     SDL_Quit();

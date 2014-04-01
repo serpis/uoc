@@ -2,6 +2,7 @@
 #define _NET_HPP
 
 void net_init();
+void net_shutdown();
 void net_connect();
 void net_poll();
 

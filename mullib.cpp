@@ -1543,7 +1543,8 @@ enum ml_type
     STATIC_ART,
     GUMP,
     LAND_BLOCK,
-    STATICS_BLOCK
+    STATICS_BLOCK,
+    SHUTDOWN
 };
 
 struct async_req_t
@@ -1594,9 +1595,11 @@ Queue<async_req_t> async_requests;
 Queue<async_req_t> async_responses;
 
 static pthread_t worker_thread;
+static bool thread_running = false;
 
 static void *mlt_worker_thread_main(void *)
 {
+    thread_running = true;
     while (true)
     {
         // wait for request
@@ -1639,6 +1642,12 @@ static void *mlt_worker_thread_main(void *)
         {
             req.statics_block.res = ml_read_statics_block(req.statics_block.map, req.statics_block.block_x, req.statics_block.block_y);
         }
+        else if (req.type == SHUTDOWN)
+        {
+            // oh well, we had a good run...
+            printf("[MLT] slave thread: shutting down. no more messages will be processed.\n");
+            break;
+        }
         else
         {
             assert(0 && "slave: unknown req type...");
@@ -1647,6 +1656,8 @@ static void *mlt_worker_thread_main(void *)
 
         //printf("slave: sent response.\n");
     }
+    printf("[MLT] slave thread: exiting.\n");
+    thread_running = false;
     return NULL;
 }
 
@@ -1740,6 +1751,23 @@ void mlt_read_statics_block(int map, int block_x, int block_y, void (*callback)(
     req.statics_block.callback = callback;
     
     async_requests.push(req);
+}
+
+void mlt_stop_worker_thread()
+{
+    assert(mlt_inited);
+
+    async_req_t req;
+    req.type = SHUTDOWN;
+    
+    async_requests.push(req);
+}
+
+bool mlt_still_working()
+{
+    assert(mlt_inited);
+
+    return thread_running || !async_responses.empty();
 }
 
 void mlt_process_callbacks()
