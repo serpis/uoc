@@ -1231,16 +1231,28 @@ mobile_t *game_create_mobile(uint32_t serial)
 // this cleaning up including removing objects from the global lists and
 // freeing any dynamically allocated objects
 void game_delete_item(item_t *item);
+void game_delete_gump(gump_t *gump);
 void game_delete_mobile(mobile_t *mobile)
 {
-    // TODO: delete all gumps etc
     for (int i = 0; i < 32; i++)
     {
         if (mobile->equipped_items[i] != NULL)
         {
-            // item will remove itself from the mobile's equipped items
             game_delete_item(mobile->equipped_items[i]);
+
+            // delete_item will set this pointer to NULL,
+            //  but be explicit for clarity
+            mobile->equipped_items[i] = NULL;
         }
+    }
+
+    if (mobile->paperdoll_gump != NULL)
+    {
+        game_delete_gump(mobile->paperdoll_gump);
+
+        // delete_gump will set this pointer to NULL,
+        //  but be explicit for clarity
+        mobile->paperdoll_gump = NULL;
     }
 
     std::map<int, mobile_t *>::iterator it = mobiles.find(mobile->serial);
