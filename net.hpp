@@ -7,7 +7,7 @@ void net_connect();
 void net_poll();
 
 void net_send_ping();
-void net_send_move(int dir);
+void net_send_move(int dir, int seq);
 void net_send_use(uint32_t serial);
 void net_send_inspect(uint32_t serial);
 void net_send_pick_up_item(uint32_t serial, int amount);

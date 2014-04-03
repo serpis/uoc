@@ -2048,6 +2048,49 @@ int find_move_z(int map, int x, int y, int cur_z)
 
 extern std::wstring decode_utf8_cstr(const char *s);
 
+struct
+{
+    int seq;
+
+    int rd, wr;
+    int valids;
+    struct
+    {
+    } entries[4];
+
+    bool empty() { return valids == 0; }
+    bool full() { return valids == 4; }
+    void reset() { wr = rd = valids = 0; }
+    int push()
+    {
+        assert(!full());
+        //entries[wr];
+        wr = (wr + 1) % 4;;
+        valids += 1;
+        int s = seq;
+        seq = (seq + 1) % 256;
+        return s;
+    }
+    void pop()
+    {
+        assert(!empty());
+        //entries[rd];
+        rd = (rd + 1) % 4;;
+        valids -= 1;
+    }
+} move_seq_queue;
+
+void game_move_rejected(int seq)
+{
+    move_seq_queue.reset();
+}
+
+void game_move_ack(int seq, int flags)
+{
+    move_seq_queue.pop();
+    player.flags = flags;
+}
+
 int main()
 {
     ml_init();
@@ -2662,27 +2705,34 @@ int main()
 
         if (next_move != -1 && now >= next_move)
         {
-            if (player.dir == move_dir)
+            if (!move_seq_queue.full())
             {
-                int new_x = player.x + move_dx;
-                int new_y = player.y + move_dy;
-
-                int new_z = find_move_z(1, new_x, new_y, player.z);
-                if (new_z != -1)
+                if (player.dir == move_dir)
                 {
-                    player.x = new_x;
-                    player.y = new_y;
-                    player.z = new_z;
-                    net_send_move(player.dir);
+                    // move in that dir
+
+                    int new_x = player.x + move_dx;
+                    int new_y = player.y + move_dy;
+
+                    int new_z = find_move_z(1, new_x, new_y, player.z);
+                    if (new_z != -1)
+                    {
+                        player.x = new_x;
+                        player.y = new_y;
+                        player.z = new_z;
+                        net_send_move(player.dir, move_seq_queue.push());
+                        player.last_movement = next_move;
+                    }
+                }
+                else
+                {
+                    // just change direction we're facing
+
+                    player.last_dir = player.dir;
+                    player.dir = move_dir;
+                    net_send_move(player.dir, move_seq_queue.push());
                     player.last_movement = next_move;
                 }
-            }
-            else
-            {
-                player.last_dir = player.dir;
-                player.dir = move_dir;
-                net_send_move(player.dir);
-                player.last_movement = next_move;
             }
             next_move += 100;
         }

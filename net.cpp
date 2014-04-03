@@ -742,17 +742,15 @@ void net_send_ping()
     send_packet(data, end);
 }
 
-static int move_sequence = 0;
-void net_send_move(int dir)
+//static int move_sequence = 0;
+void net_send_move(int dir, int seq)
 {
     char data[7];
     char *p = data;
     char *end = p + sizeof(data);
     write_uint8(&p, end, 0x02);
-    write_uint8(&p, end, dir);
-    write_uint8(&p, end, move_sequence);
-    move_sequence += 1;
-    move_sequence %= 256;
+    write_uint8(&p, end, 0x80|dir);
+    write_uint8(&p, end, seq);
     write_uint32_be(&p, end, 0);
     assert(p == end);
     send_packet(data, end);
@@ -1396,13 +1394,12 @@ void net_poll()
                     mobile_t *m = game_get_mobile(serial);
 
                     int seq = read_uint8(&p, end);
-                    m->x = read_uint16_be(&p, end);
+                    game_move_rejected(seq);
+
+                    /*m->x = read_uint16_be(&p, end);
                     m->y = read_uint16_be(&p, end);
                     m->dir = read_uint8(&p, end);
-                    m->z = read_sint8(&p, end);
-
-                    // reset movement sequence
-                    move_sequence = 0;
+                    m->z = read_sint8(&p, end);*/
 
                     //printf("move reject seq %d\n", seq);
                     break;
@@ -1412,7 +1409,11 @@ void net_poll()
                     mobile_t *m = game_get_mobile(serial);
 
                     int seq = read_uint8(&p, end);
-                    m->flags = read_uint8(&p, end);
+                    int flags = read_uint8(&p, end);
+                    game_move_ack(seq, flags);
+
+                    //int seq = read_uint8(&p, end);
+                    //m->flags = read_uint8(&p, end);
 
                     //printf("move ack seq %d\n", seq);
                     break;

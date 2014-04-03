@@ -168,4 +168,6 @@ gump_t *game_create_generic_gump(uint32_t gump_serial, uint32_t gump_type_id, in
 gump_t *game_get_container(uint32_t item_serial);
 void game_pick_up_rejected();
 void game_do_action(uint32_t mob_serial, int action_id, int frame_count, int repeat_count, bool forward, bool do_repeat, int frame_delay);
+void game_move_rejected(int seq);
+void game_move_ack(int seq, int flags);
 
