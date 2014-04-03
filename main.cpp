@@ -1048,29 +1048,33 @@ void draw_world_mobile(mobile_t *mobile, int pick_id)
         action_start = mobile->anim_start;
     }
 
+    int walk_action_id;
+    int run_action_id;
+    int stand_action_id;
+
+    // animal or monster
+    if (mobile->body_id < 400)
+    {
+        walk_action_id = 0;
+        run_action_id = 1;
+        stand_action_id = 2;
+    }
+    else
+    {
+        walk_action_id = (mobile->flags & MOBFLAG_WARMODE) ? 7 : 0;
+        run_action_id = 2;
+        stand_action_id = (mobile->flags & MOBFLAG_WARMODE) ? 15 : 4;
+    }
+
     // no animation? do stand animation...
     if (mobile->anim_start == -1)
     {
-        if (mobile->flags & MOBFLAG_WARMODE)
-        {
-            action_id = 15;
-        }
-        else
-        {
-            action_id = 4;
-        }
+        action_id = stand_action_id;
     }
     // mobiles' walk animation override current animation
     if (now - mobile->last_movement <= 500)
     {
-        if (mobile->flags & MOBFLAG_WARMODE)
-        {
-            action_id = 7;
-        }
-        else
-        {
-            action_id = 0;
-        }
+        action_id = walk_action_id;
     }
 
     draw_world_anim(mobile->body_id, action_id, action_start, mobile->dir, mobile->x, mobile->y, mobile->z, 0, mobile->hue_id, pick_id);
