@@ -1052,14 +1052,19 @@ void draw_world_mobile(mobile_t *mobile, int pick_id)
     int run_action_id;
     int stand_action_id;
 
-    // animal or monster
-    if (mobile->body_id < 400)
+    if (mobile->body_id < 200) // monster
+    {
+        walk_action_id = 0;
+        run_action_id = 0; // dragon's fly seems to be action 19?
+        stand_action_id = 1;
+    }
+    else if (mobile->body_id < 400) // animal
     {
         walk_action_id = 0;
         run_action_id = 1;
         stand_action_id = 2;
     }
-    else
+    else // probably human?
     {
         walk_action_id = (mobile->flags & MOBFLAG_WARMODE) ? 7 : 0;
         run_action_id = 2;
