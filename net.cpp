@@ -1394,7 +1394,13 @@ void net_poll()
                     mobile_t *m = game_get_mobile(serial);
 
                     int seq = read_uint8(&p, end);
-                    game_move_rejected(seq);
+
+                    int x = read_uint16_be(&p, end);
+                    int y = read_uint16_be(&p, end);
+                    int dir = read_uint8(&p, end);
+                    int z = read_sint8(&p, end);
+
+                    game_move_rejected(seq, x, y, z, dir);
 
                     /*m->x = read_uint16_be(&p, end);
                     m->y = read_uint16_be(&p, end);

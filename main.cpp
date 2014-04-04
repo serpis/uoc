@@ -1064,7 +1064,7 @@ void draw_world_mobile(mobile_t *mobile, int pick_id)
         run_action_id = 1;
         stand_action_id = 2;
     }
-    else // probably human?
+    else // human?
     {
         walk_action_id = (mobile->flags & MOBFLAG_WARMODE) ? 7 : 0;
         run_action_id = 2;
@@ -2065,7 +2065,7 @@ struct
 
     bool empty() { return valids == 0; }
     bool full() { return valids == 4; }
-    void reset() { wr = rd = valids = 0; }
+    void reset() { wr = rd = valids = seq = 0; }
     int push()
     {
         assert(!full());
@@ -2085,9 +2085,13 @@ struct
     }
 } move_seq_queue;
 
-void game_move_rejected(int seq)
+void game_move_rejected(int seq, int x, int y, int z, int dir)
 {
     move_seq_queue.reset();
+    player.x = x;
+    player.y = y;
+    player.z = z;
+    player.dir = dir;
 }
 
 void game_move_ack(int seq, int flags)
