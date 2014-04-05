@@ -1402,12 +1402,6 @@ void net_poll()
 
                     game_move_rejected(seq, x, y, z, dir);
 
-                    /*m->x = read_uint16_be(&p, end);
-                    m->y = read_uint16_be(&p, end);
-                    m->dir = read_uint8(&p, end);
-                    m->z = read_sint8(&p, end);*/
-
-                    //printf("move reject seq %d\n", seq);
                     break;
                 }
                 case 0x22: {
@@ -1418,10 +1412,6 @@ void net_poll()
                     int flags = read_uint8(&p, end);
                     game_move_ack(seq, flags);
 
-                    //int seq = read_uint8(&p, end);
-                    //m->flags = read_uint8(&p, end);
-
-                    //printf("move ack seq %d\n", seq);
                     break;
                 }
                 case 0x24: {
