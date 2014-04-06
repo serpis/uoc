@@ -1031,6 +1031,20 @@ void draw_world_anim(int body_id, int action, long action_start, int direction, 
     }
 }
 
+bool body_is_animal(int body_id)
+{
+    return body_id >= 200 && body_id < 400;
+}
+
+bool body_is_monster(int body_id)
+{
+    return body_id < 200;
+}
+
+bool body_is_human(int body_id)
+{
+    return body_id == 400 || body_id == 401;
+}
 
 void draw_world_mobile(mobile_t *mobile, int pick_id)
 {
@@ -1052,13 +1066,13 @@ void draw_world_mobile(mobile_t *mobile, int pick_id)
     int run_action_id;
     int stand_action_id;
 
-    if (mobile->body_id < 200) // monster
+    if (body_is_monster(mobile->body_id))
     {
         walk_action_id = 0;
         run_action_id = 0; // dragon's fly seems to be action 19?
         stand_action_id = 1;
     }
-    else if (mobile->body_id < 400) // animal
+    else if (body_is_animal(mobile->body_id))
     {
         walk_action_id = 0;
         run_action_id = 1;
@@ -1066,9 +1080,9 @@ void draw_world_mobile(mobile_t *mobile, int pick_id)
     }
     else // human?
     {
-        walk_action_id = (mobile->flags & MOBFLAG_WARMODE) ? 7 : 0;
+        walk_action_id = (mobile->flags & MOBFLAG_WARMODE) ? 15 : 0;
         run_action_id = 2;
-        stand_action_id = (mobile->flags & MOBFLAG_WARMODE) ? 15 : 4;
+        stand_action_id = (mobile->flags & MOBFLAG_WARMODE) ? 7 : 4;
     }
 
     // no animation? do stand animation...
@@ -1083,19 +1097,22 @@ void draw_world_mobile(mobile_t *mobile, int pick_id)
     }
 
     draw_world_anim(mobile->body_id, action_id, action_start, mobile->dir, mobile->x, mobile->y, mobile->z, 0, mobile->hue_id, pick_id);
-    for (int i = 0; i < 32; i++)
+    if (body_is_human(mobile->body_id))
     {
-        int layer = layer_draw_order[i];
-        item_t *item = mobile->equipped_items[layer];
-        if (item != NULL)
+        for (int i = 0; i < 32; i++)
         {
-            int item_id = item->item_id;
-            int hue_id = item->hue_id;
-            ml_item_data_entry *item_data = ml_get_item_data(item_id);
-            if (item_data->animation != 0)
+            int layer = layer_draw_order[i];
+            item_t *item = mobile->equipped_items[layer];
+            if (item != NULL)
             {
-                //printf("drawing anim for item_id %d (%s)\n", item_id, item_data->name);
-                draw_world_anim(item_data->animation, action_id, action_start, mobile->dir, mobile->x, mobile->y, mobile->z, i, hue_id, pick_id);
+                int item_id = item->item_id;
+                int hue_id = item->hue_id;
+                ml_item_data_entry *item_data = ml_get_item_data(item_id);
+                if (item_data->animation != 0)
+                {
+                    //printf("drawing anim for item_id %d (%s)\n", item_id, item_data->name);
+                    draw_world_anim(item_data->animation, action_id, action_start, mobile->dir, mobile->x, mobile->y, mobile->z, i, hue_id, pick_id);
+                }
             }
         }
     }
