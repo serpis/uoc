@@ -1360,9 +1360,10 @@ void net_poll()
                     {
                         s += read_uint8(&p, end);
                     }
+                    game_speech(serial, font_id, decode_utf8_cstr(name), s);
                     // TODO: do something with this text...
-                    printf("%s: ", name);
-                    std::wcout << s << std::endl;
+                    //printf("%s: ", name);
+                    //std::wcout << s << std::endl;
                     break;
                 }
                 case 0x1d: {
@@ -1762,9 +1763,10 @@ void net_poll()
                     {
                         s += read_uint16_be(&p, end);
                     }
+                    game_speech(serial, font_id, decode_utf8_cstr(name), s);
                     // TODO: do something with this text...
-                    printf("[%s] %s: ", lang, name);
-                    std::wcout << s << std::endl;
+                    //printf("[%s] %s: ", lang, name);
+                    //std::wcout << s << std::endl;
                     break;
                 }
                 case 0xbd: {
@@ -1815,7 +1817,9 @@ void net_poll()
                     }
                     std::vector<std::wstring> args = split(arg_str, L'\t');
                     std::wstring res = cliloc_format_resolve(format, args);
-                    std::wcout << speaker << ": " << res << std::endl;
+                    //std::wcout << speaker << ": " << res << std::endl;
+
+                    game_speech(speaker_serial, font_id, decode_utf8_cstr(speaker), res);
 
                     break;
                 }
@@ -1874,7 +1878,8 @@ void net_poll()
                         res += affix;
                     }
 
-                    std::wcout << speaker << ": " << res << std::endl;
+                    //std::wcout << speaker << ": " << res << std::endl;
+                    game_speech(speaker_serial, font_id, decode_utf8_cstr(speaker), res);
 
                     break;
                 }

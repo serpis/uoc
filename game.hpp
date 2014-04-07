@@ -2,6 +2,36 @@
 #include <stdint.h>
 #include <list>
 
+struct text_queue_t
+{
+    int wr;
+    int rd;
+    int valids;
+    std::wstring *strings[3];
+
+    bool empty() { return valids == 0; }
+    bool full() { return valids == 3; }
+    void reset() { wr = rd = valids = 0; }
+    void push(std::wstring s)
+    {
+        if (full())
+        {
+            pop();
+        }
+        strings[wr] = new std::wstring;
+        *strings[wr] = s;
+        wr = (wr + 1) % 3;
+        valids += 1;
+    }
+    void pop()
+    {
+        assert(!empty());
+        delete strings[rd];
+        rd = (rd + 1) % 3;
+        valids -= 1;
+    }
+};
+
 const int MOBFLAG_WARMODE = 0x40;
 const int MOBFLAG_HIDDEN  = 0x80;
 struct mobile_t
@@ -15,6 +45,8 @@ struct mobile_t
     int flags;
     struct gump_t *paperdoll_gump;
     struct item_t *equipped_items[32];
+
+    text_queue_t speech;
 
     // animation related stuff
     int last_dir;
@@ -170,4 +202,5 @@ void game_pick_up_rejected();
 void game_do_action(uint32_t mob_serial, int action_id, int frame_count, int repeat_count, bool forward, bool do_repeat, int frame_delay);
 void game_move_rejected(int seq, int x, int y, int z, int dir);
 void game_move_ack(int seq, int flags);
+void game_speech(uint32_t serial, int font_id, std::wstring name, std::wstring s);
 

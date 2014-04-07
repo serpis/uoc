@@ -791,8 +791,9 @@ mobile_t player =
     0, // hue
     0, // noto
     0, // flags
-    NULL,
+    NULL, // paperdoll gump
     {NULL}, // equipped items
+    {0}, // speech
     0, // last_dir
     0, // last_movement
     4, // action_id
@@ -934,6 +935,31 @@ void draw_world_art_ps(pixel_storage_t *ps, int x, int y, int z, int height, int
     blit_ps(ps, screen_x, screen_y, world_draw_prio(x, y, z) + bonus_prio, hue_id, pick_id);
 }
 
+static int gump_draw_order = 0;
+void draw_screen_text(int x, int y, int font_id, int align_x, std::wstring s, int pick_id)
+{
+    pixel_storage_t *ps = get_string_ps(font_id, s);
+    // TODO: this null check shouldn't be necessary
+    if (ps)
+    {
+        int draw_x;
+        if        (align_x <  0)   draw_x = x;
+        else if   (align_x == 0)   draw_x = x - ps->width / 2;
+        else /*if (align_x >  0)*/ draw_x = x - ps->width;
+
+        blit_ps(ps, draw_x, y, gump_draw_order++, 0, pick_id);
+    }
+}
+
+void draw_world_text(int x, int y, int z, int row_offset, int font_id, std::wstring s, int pick_id)
+{
+    int screen_x;
+    int screen_y;
+    world_to_screen(x, y, z, &screen_x, &screen_y);
+
+    draw_screen_text(screen_x, screen_y - row_offset, font_id, 0, s, pick_id);
+}
+
 void draw_world_anim_frame(anim_frame_t *frame, bool flip, int x, int y, int z, int layer_prio, int hue_id, int pick_id)
 {
     pixel_storage_t *ps = &frame->ps;
@@ -989,7 +1015,6 @@ void draw_world_land_block(int map, int block_x, int block_y)
     }
 }
 
-static int gump_draw_order = 0;
 void draw_screen_item(int item_id, int x, int y, int hue_id, int pick_id)
 {
     pixel_storage_t *ps = get_static_ps(item_id);
@@ -1069,7 +1094,7 @@ void draw_world_mobile(mobile_t *mobile, int pick_id)
     if (body_is_monster(mobile->body_id))
     {
         walk_action_id = 0;
-        run_action_id = 0; // dragon's fly seems to be action 19?
+        run_action_id = 0; // dragon's fly animation seems to be action 19?
         stand_action_id = 1;
     }
     else if (body_is_animal(mobile->body_id))
@@ -1693,6 +1718,40 @@ void draw_world()
     }
 }
 
+void draw_world_texts()
+{
+    // draw mobiles' texts
+    {
+        std::map<int, mobile_t *>::iterator it;
+        for (it = mobiles.begin(); it != mobiles.end(); ++it)
+        {
+            mobile_t *mobile = it->second;
+            if (is_in_draw_range(mobile->x, mobile->y, mobile->z))
+            {
+                int pick_id = pick_mobile(mobile);
+                for (int i = 0; i < mobile->speech.valids; i++)
+                {
+                    int index = (mobile->speech.rd + i) % 3;
+                    std::wstring &s = *mobile->speech.strings[index];
+                    draw_world_text(mobile->x, mobile->y, mobile->z, i*20, 0, s, pick_id);
+                }
+            }
+        }
+    }
+
+    // draw player's text
+    {
+        mobile_t *mobile = &player;
+        int pick_id = pick_mobile(mobile);
+        for (int i = 0; i < mobile->speech.valids; i++)
+        {
+            int index = (mobile->speech.wr - i - 1 + 3) % 3;
+            std::wstring &s = *mobile->speech.strings[index];
+            draw_world_text(mobile->x, mobile->y, mobile->z, i*20, 0, s, pick_id);
+        }
+    }
+}
+
 void draw_gump(int gump_id, int x, int y, int hue_id, int pick_id)
 {
     pixel_storage_t *ps = get_gump_ps(gump_id);
@@ -1786,12 +1845,6 @@ void draw_gump_dynamic(int gump_id_base, int x, int y, int width, int height, in
     }
 }
 
-void draw_text(int x, int y, int font_id, std::wstring s, int pick_id)
-{
-    pixel_storage_t *ps = get_string_ps(font_id, s);
-    blit_ps(ps, x, y, gump_draw_order++, 0, pick_id);
-}
-
 void draw_paperdoll(gump_t *gump)
 {
 // <body-id> <paperdoll-gump-id> <offset for this body> <fallback offset>
@@ -1819,7 +1872,7 @@ void draw_paperdoll(gump_t *gump)
     // TODO: draw buttons
 
     // name
-    draw_text(x + 40, y + 262, 0, *gump->paperdoll.name, pick_id);
+    draw_screen_text(x + 40, y + 262, 0, -1, *gump->paperdoll.name, pick_id);
 
     // body
     draw_gump(12, x, y + 20, m->hue_id, pick_id);
@@ -1894,7 +1947,7 @@ void draw_generic_gump(gump_t *gump)
             }
             else if (widget.type == GUMPWTYPE_TEXT)
             {
-                draw_text(x + widget.text.x, y + widget.text.y, widget.text.font_id, *widget.text.text, pick_id);
+                draw_screen_text(x + widget.text.x, y + widget.text.y, widget.text.font_id, -1, *widget.text.text, pick_id);
             }
             else
             {
@@ -2092,7 +2145,7 @@ struct
     {
         assert(!full());
         //entries[wr];
-        wr = (wr + 1) % 4;;
+        wr = (wr + 1) % 4;
         valids += 1;
         int s = seq;
         seq = (seq + 1) % 256;
@@ -2102,7 +2155,7 @@ struct
     {
         assert(!empty());
         //entries[rd];
-        rd = (rd + 1) % 4;;
+        rd = (rd + 1) % 4;
         valids -= 1;
     }
 } move_seq_queue;
@@ -2120,6 +2173,26 @@ void game_move_ack(int seq, int flags)
 {
     move_seq_queue.pop();
     player.flags = flags;
+}
+
+void game_speech(uint32_t serial, int font_id, std::wstring name, std::wstring s)
+{
+    bool is_item = serial & 0x40000000u;
+    if (is_item)
+    {
+        printf("item [%08x] ", serial);
+        std::wcout << name << ": " << s << std::endl;
+
+        item_t *item = game_get_item(serial);
+    }
+    else
+    {
+        printf("mobile [%08x] ", serial);
+        std::wcout << name << ": " << s << std::endl;
+
+        mobile_t *mobile = game_get_mobile(serial);
+        mobile->speech.push(s);
+    }
 }
 
 int main()
@@ -2247,6 +2320,7 @@ int main()
         draw_world();
         gfx_flush();
         glClear(GL_DEPTH_BUFFER_BIT);
+        draw_world_texts();
         // draw gumps
         {
             std::list<gump_t *>::iterator it;
@@ -2325,6 +2399,7 @@ int main()
         gfx_flush();
 
         glClear(GL_DEPTH_BUFFER_BIT);
+        draw_world_texts();
         // draw gumps
         {
             std::list<gump_t *>::iterator it;
@@ -2346,7 +2421,7 @@ int main()
 
         // draw chat string
         {
-            draw_text(0, 0, 0, chat_str + L"_", -1);
+            draw_screen_text(0, 0, 0, -1, chat_str + L"_", -1);
         }
 
         gfx_flush();
