@@ -1,5 +1,7 @@
 #include <cassert>
 
+#include <stdint.h>
+
 #include <algorithm>
 #include <list>
 #include <vector>
@@ -677,4 +679,57 @@ void gfx_render(pixel_storage_t *ps, int xs[4], int ys[4], int draw_prio, int hu
     //render_command(&cmd);
 }
 
+void gfx_scissor_area(int x, int y, int width, int height)
+{
+    glScissor(x, y, width, height);
+}
+
+void gfx_scissor(bool enable)
+{
+    if (enable)
+    {
+        glEnable(GL_SCISSOR_TEST);
+    }
+    else
+    {
+        glDisable(GL_SCISSOR_TEST);
+    }
+}
+
+void gfx_clear(bool color, bool depth)
+{
+    int mask = 0;
+    if (color)
+    {
+        mask |= GL_COLOR_BUFFER_BIT;
+    }
+    if (depth)
+    {
+        mask |= GL_DEPTH_BUFFER_BIT;
+    }
+    glClearColor(1.0, 0.0, 1.0, 1.0);
+    glClear(mask);
+}
+
+void gfx_background()
+{
+    glColor4f(1.0f, 1.0f, 0.0f, 1.0f);
+    glBegin(GL_TRIANGLES);
+    glVertex2f(-1.0f, -1.0f);
+    glVertex2f( 1.0f, -1.0f);
+    glVertex2f( 0.0f,  1.0f);
+    glEnd();
+}
+
+uint32_t gfx_read_pixel(int x, int y)
+{
+    uint8_t data[3];
+    glReadPixels(x, y, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, &data);
+    uint32_t res = 0;
+    res |= data[0] << 16;
+    res |= data[1] << 8;
+    res |= data[2] << 0;
+
+    return res;
+}
 

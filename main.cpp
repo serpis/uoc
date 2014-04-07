@@ -18,20 +18,10 @@
 
 #ifdef _LINUX
 
- #define GL3_PROTOTYPES 1
- #define GL_GLEXT_PROTOTYPES
- #include <GL/gl.h>
- #include <GL/glext.h>
- #include <GL/glu.h>
- 
  #include <SDL2/SDL.h>
 
 #else
 
- #define GL3_PROTOTYPES 1
- #include <OpenGL/gl.h>
- #include <OpenGL/glu.h>
- 
  #include <SDL2/SDL.h>
 
 #endif
@@ -2289,15 +2279,9 @@ int main()
         // resource load handling
         mlt_process_callbacks();
 
+        gfx_clear(true, true);
         // draw distinct background
-        glClearColor(1.0, 0.0, 1.0, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glColor4f(1.0f, 1.0f, 0.0f, 1.0f);
-        glBegin(GL_TRIANGLES);
-        glVertex2f(-1.0f, -1.0f);
-        glVertex2f( 1.0f, -1.0f);
-        glVertex2f( 0.0f,  1.0f);
-        glEnd();
+        gfx_background();
 
         int world_center_block_x = player.x / 8;
         int world_center_block_y = player.y / 8;
@@ -2315,11 +2299,11 @@ int main()
         // reset pick ids
         next_pick_id = 0;
         picking_enabled = true;
-        glScissor(mouse_x, inverted_mouse_y, 1, 1);
-        glEnable(GL_SCISSOR_TEST);
+        gfx_scissor_area(mouse_x, inverted_mouse_y, 1, 1);
+        gfx_scissor(true);
         draw_world();
         gfx_flush();
-        glClear(GL_DEPTH_BUFFER_BIT);
+        gfx_clear(false, true);
         draw_world_texts();
         // draw gumps
         {
@@ -2332,18 +2316,13 @@ int main()
         }
         gfx_flush();
         //draw_paperdoll(&player, 0, 0, pick_gump());
-        glDisable(GL_SCISSOR_TEST);
-        glScissor(0, 0, window_width, window_height);
+        gfx_scissor(false);
+        gfx_scissor_area(0, 0, window_width, window_height);
 
         // do picking
         pick_target_t *pick_target = NULL;
         {
-            uint8_t data[3];
-            glReadPixels(mouse_x, inverted_mouse_y, 1, 1, GL_RGB, GL_UNSIGNED_BYTE, &data);
-            int pick_id0 = data[0];
-            int pick_id1 = data[1];
-            int pick_id2 = data[2];
-            int pick_id = (pick_id0 << 16) | (pick_id1 << 8) | pick_id2;
+            int pick_id = gfx_read_pixel(mouse_x, inverted_mouse_y);
 
             if (pick_id >= 0 && pick_id < sizeof(pick_slots)/sizeof(pick_slots[0]))
             {
@@ -2382,23 +2361,15 @@ int main()
         }
         
 
-
+        gfx_clear(true, true);
         // draw distinct background
-        glClearColor(1.0, 0.0, 1.0, 1.0);
-        glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-        glColor4f(1.0f, 1.0f, 0.0f, 1.0f);
-        glBegin(GL_TRIANGLES);
-        glVertex2f(-1.0f, -1.0f);
-        glVertex2f( 1.0f, -1.0f);
-        glVertex2f( 0.0f,  1.0f);
-        glEnd();
-
+        gfx_background();
 
         picking_enabled = false;
         draw_world();
         gfx_flush();
 
-        glClear(GL_DEPTH_BUFFER_BIT);
+        gfx_clear(false, true);
         draw_world_texts();
         // draw gumps
         {
