@@ -1936,6 +1936,11 @@ void game_do_action(uint32_t mob_serial, int action_id, int frame_count, int rep
 {
     if (action_id >= 35)
     {
+        //printf("patching action %d to 16\n", action_id);
+        action_id = 16;
+    }
+    if (action_id >= 35)
+    {
         printf("ignoring animation with action_id %d (because it is >= 35, don't know how to handle)\n", action_id);
     }
     else
