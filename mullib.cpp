@@ -955,6 +955,35 @@ static void index(const char *filename, ml_index **idx)
     file_unmap(p, end);
 }
 
+static void parse_speech(const char *p, const char *end, ml_art **art)
+{
+    while (p < end)
+    {
+        int index = read_uint16_be(&p, end);
+        int length = read_uint16_be(&p, end);
+
+        //printf("index: %d length: %d\n", index, length);
+
+        char *s = (char *)malloc(length+1);
+        s[length-1] = '\0';
+        read_ascii_fixed(&p, end, s, length);
+
+        printf("speech %d: %s\n", index, s);
+        free(s);
+    }
+}
+
+static void read_speech()
+{
+    const char *end;
+    const char *p = file_map("files/speech.mul", &end);
+
+    // do stuff...
+    parse_speech(p, end, NULL);
+
+    file_unmap(p, end);
+}
+
 static void parse_tiledata(const char *p, const char *end)
 {
     int remaining_bytes = (int)(end - p);
@@ -1227,6 +1256,9 @@ static int calc_anim_id(int anim_file, int body_id, int action, int direction)
 void ml_init()
 {
     assert(!ml_inited);
+
+    printf("[ML]: Reading speech...\n");
+    read_speech();
 
     printf("[ML]: Reading tiledata...\n");
     read_tiledata();
